@@ -1,5 +1,7 @@
-import {View, Text, TouchableOpacity, useWindowDimensions} from 'react-native';
-import React, {useEffect, useState, useLayoutEffect} from 'react';
+// 직접 등록 안내 페이지
+
+import {TouchableOpacity, useWindowDimensions} from 'react-native';
+import React, {useLayoutEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
@@ -67,7 +69,7 @@ const ButtonText = styled.Text`
   line-height: 20px;
 `;
 
-const DirectRegister = () => {
+const DirectRegister = props => {
   const navigation = useNavigation();
   const {width, height} = useWindowDimensions();
 
@@ -84,6 +86,7 @@ const DirectRegister = () => {
         </TouchableOpacity>
       ),
       title: '직접 등록이란',
+      headerTitleAlign: 'center',
       headerShadowVisible: false,
       contentStyle: {
         borderTopColor: '#F7F7F7',
@@ -126,7 +129,10 @@ const DirectRegister = () => {
         <Button
           width={width}
           onPress={() => {
-            navigation.push('RegisterDirectHouse');
+            navigation.push('RegisterDirectHouse', {
+              prevChat: props.route.params?.prevChat,
+              prevSheet: props.route.params?.prevSheet,
+            });
           }}>
           <ButtonText>등록하기</ButtonText>
         </Button>

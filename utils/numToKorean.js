@@ -10,12 +10,12 @@ const numberToKorean = num => {
 
   // koreanArray의 요소가 KoreanDigit과 일치하면 같은 인덱스의 digit으로 바꾼다.
   const koreanNumberArray = koreanArray.map(item => {
+    // if (num > 10000 && item === '십') return '0';
     const index = koreanDigit.indexOf(item);
-    console.log('index', index);
     if (index > -1) {
-      console.log('digit[index]', digit[index]);
       return digit[index];
     }
+
     return item;
   });
 

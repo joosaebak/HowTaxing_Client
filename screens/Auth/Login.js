@@ -1,43 +1,19 @@
-import {
-  View,
-  Text,
-  StatusBar,
-  useWindowDimensions,
-  Image,
-  Platform,
-  ImageBackground,
-} from 'react-native';
+import {StatusBar, useWindowDimensions} from 'react-native';
 import React, {useEffect, useLayoutEffect} from 'react';
 import styled from 'styled-components';
 import {useNavigation} from '@react-navigation/native';
-import Logo from '../../assets/images/logo.svg';
-import LogoTitle from '../../assets/images/logo_title.svg';
-import LoginIntro from '../../assets/images/login_intro.svg';
 import getFontSize from '../../utils/getFontSize';
-import {
-  login,
-  logout,
-  getProfile,
-  shippingAddresses,
-  unlink,
-} from '@react-native-seoul/kakao-login';
-import NaverLogin, {
-  NaverLoginResponse,
-  GetProfileResponse,
-} from '@react-native-seoul/naver-login';
-import {
-  GoogleSignin,
-  GoogleSigninButton,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
+import {login} from '@react-native-seoul/kakao-login';
+import NaverLogin from '@react-native-seoul/naver-login';
+import {GoogleSignin} from '@react-native-google-signin/google-signin';
 import {
   appleAuth,
   appleAuthAndroid,
 } from '@invertase/react-native-apple-authentication';
 import {useDispatch} from 'react-redux';
 import {setCurrentUser} from '../../redux/currentUserSlice';
-
-GoogleSignin.configure();
+import axios from 'axios';
+import {SheetManager} from 'react-native-actions-sheet';
 
 const Container = styled.ImageBackground.attrs(props => ({
   source: require('../../assets/images/loginBG.png'),
@@ -51,7 +27,7 @@ const IntroSection = styled.View`
   flex: 1;
   width: 100%;
   padding: 25px;
-  justify-content: flex-end;
+  justify-content: center;
 `;
 
 const SocialButton = styled.TouchableOpacity.attrs(props => ({
@@ -59,8 +35,8 @@ const SocialButton = styled.TouchableOpacity.attrs(props => ({
 }))`
   width: ${props => props.width - 40}px;
   flex-direction: row;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   height: 60px;
   border-radius: 30px;
   padding: 10px;
@@ -69,6 +45,7 @@ const SocialButton = styled.TouchableOpacity.attrs(props => ({
 `;
 
 const SocialButtonText = styled.Text`
+  width: auto;
   font-size: ${getFontSize(15)}px;
   font-family: Pretendard-Regular;
   line-height: 20px;
@@ -80,7 +57,7 @@ const SocialButtonIcon = styled.Image.attrs(props => ({
 }))`
   width: 22px;
   height: 20px;
-  margin-right: 16px;
+  margin-right: 10px;
 `;
 
 const ButtonSection = styled.View`
@@ -91,9 +68,19 @@ const ButtonSection = styled.View`
 `;
 
 const LogoGroup = styled.View`
-  flex-direction: row;
+  width: 260px;
+  height: 50px;
+
+  align-self: center;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+`;
+
+const LogoImage = styled.Image.attrs(props => ({
+  resizeMode: 'contain',
+}))`
+  width: 100%;
+  height: 100%;
 `;
 
 const Overlay = styled.View`
@@ -114,48 +101,16 @@ const Login = () => {
     });
   }, [navigation]);
 
-  useEffect(() => {
-    StatusBar.setBarStyle('light-content', true);
-    if (Platform.OS === 'android') {
-      StatusBar.setTranslucent(true);
-      StatusBar.setBackgroundColor('transparent');
-    }
-  }, []);
-
-  const onGoogleLogin = async () => {
-    try {
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-      console.log('userInfo', userInfo);
-    } catch (error) {
-      console.log('error', error);
-    }
-    dispatch(
-      setCurrentUser({
-        name: '김하우',
-        email: '',
-      }),
-    );
-  };
-
+  // 카카오 로그인
   const onKakaoLogin = async () => {
-    const {idToken} = await login();
+    const {accessToken} = await login();
 
-    if (idToken) {
-      console.log('idToken', idToken);
-
-      const profile = await getProfile();
-
-      console.log('profile.id', profile);
+    if (accessToken) {
+      socialLogin(0, accessToken);
     }
-    dispatch(
-      setCurrentUser({
-        name: '김하우',
-        email: '',
-      }),
-    );
   };
 
+  // 네이버 로그인
   const onNaverLogin = async () => {
     await NaverLogin.login({
       appName: '하우택싱',
@@ -163,25 +118,40 @@ const Login = () => {
       consumerSecret: 'DEn_pJGqup',
       serviceUrlScheme: 'howtaxing',
     }).then(async res => {
-      console.log('res', res);
-      try {
-        const profileRes = await NaverLogin.getProfile(
-          res?.successResponse.accessToken,
-        );
-        const user = profileRes.response;
-        console.log(JSON.stringify(profileRes.response));
-      } catch (err) {
-        console.log(err);
+      const {accessToken} = res?.successResponse;
+
+      console.log('accessToken', accessToken);
+
+      if (accessToken) {
+        socialLogin(1, accessToken);
       }
     });
-    dispatch(
-      setCurrentUser({
-        name: '김하우',
-        email: '',
-      }),
-    );
   };
 
+  // 구글 로그인
+  const onGoogleLogin = async () => {
+    await GoogleSignin.hasPlayServices();
+
+    const GOOGLE_CLIENT_ID =
+      '797361358853-j9mpkpnq9bgrnmahi46dgkb5loufk5bg.apps.googleusercontent.com';
+    GoogleSignin.configure({
+      webClientId: GOOGLE_CLIENT_ID,
+      offlineAccess: true,
+    });
+    try {
+      await GoogleSignin.signIn();
+      const user = await GoogleSignin.getTokens();
+
+      const accessToken = user.accessToken;
+      console.log('accessToken', accessToken);
+
+      socialLogin(2, accessToken);
+    } catch (error) {
+      console.log('error', error);
+    }
+  };
+
+  // 애플 로그인
   const onAppleLogin = async () => {
     // if (appleAuthAndroid.isSupported) {
     //   const appleAuthRequestResponse = await appleAuth.performRequest({
@@ -217,21 +187,61 @@ const Login = () => {
     );
   };
 
+  // 소셜 로그인
+  const socialLogin = async (userType, accessToken) => {
+    const data = {
+      userType,
+      accessToken,
+    };
+
+    axios
+      .post('http://13.125.194.154:8080/user/socialLogin', data)
+      .then(response => {
+        if (response.data.isError) {
+          SheetManager.show('info', {
+            payload: {
+              type: 'error',
+              message: '로그인에 실패했습니다.',
+              description: response.data.errMsg,
+            },
+          });
+          return;
+        }
+        // 성공적인 응답 처리
+        const {id} = response.data;
+        getUserData(id);
+      })
+      .catch(error => {
+        // 오류 처리
+        console.error(error);
+      });
+  };
+
+  // 유저 정보 가져오기
+  const getUserData = async id => {
+    await axios
+      .get(`http://13.125.194.154:8080/user/${id}`)
+      .then(response => {
+        // 성공적인 응답 처리
+        console.log(response.data);
+        const userData = response.data;
+        dispatch(setCurrentUser(userData));
+      })
+      .catch(error => {
+        // 오류 처리
+        console.error(error);
+      });
+  };
+
   return (
     <Container>
+      <StatusBar barStyle="light-content" />
       <Overlay />
       <ButtonSection>
         <IntroSection>
           <LogoGroup>
-            <Logo />
-            <LogoTitle />
+            <LogoImage source={require('../../assets/images/logo.png')} />
           </LogoGroup>
-          <LoginIntro
-            style={{
-              alignSelf: 'flex-end',
-              marginTop: 20,
-            }}
-          />
         </IntroSection>
         <SocialButton
           onPress={onKakaoLogin}
@@ -239,13 +249,14 @@ const Login = () => {
           style={{
             backgroundColor: '#FBE54D',
           }}>
-          <SocialButtonIcon
-            source={require('../../assets/images/socialIcon/kakao_ico.png')}
-          />
           <SocialButtonText
             style={{
               color: '#3B1F1E',
             }}>
+            <SocialButtonIcon
+              source={require('../../assets/images/socialIcon/kakao_ico.png')}
+            />
+            {'  '}
             카카오톡으로 로그인
           </SocialButtonText>
         </SocialButton>

@@ -1,19 +1,26 @@
+// 보유 주택 상세 정보 페이지
+
 import {
   View,
   Text,
   TouchableOpacity,
   useWindowDimensions,
-  TextInput,
-  Pressable,
+  Image,
+  Alert,
+  BackHandler,
 } from 'react-native';
-import React, {useEffect, useState, useLayoutEffect, useRef} from 'react';
+import React, {useState, useLayoutEffect, useEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
-import FamilyIcon from '../../assets/images/family_users.svg';
 import DropShadow from 'react-native-drop-shadow';
 import {KeyboardAwareScrollView} from 'react-native-keyboard-aware-scroll-view';
-import ChevronIcon from '../../assets/icons/select_box_arrow_ico.svg';
+import getFontSize from '../../utils/getFontSize';
+import NaverMapView, {Marker} from 'react-native-nmap';
+import Switch from 'react-native-draggable-switch';
+import {SheetManager} from 'react-native-actions-sheet';
+import {HOUSE_TYPE} from '../../constants/colors';
+import axios from 'axios';
 
 const Container = styled.View`
   flex: 1;
@@ -21,39 +28,55 @@ const Container = styled.View`
   background-color: #f5f7fa;
 `;
 
-const IntroSection = styled.View`
-  padding: 25px;
-  height: 220px;
+const HoustInfoSection = styled.View`
   width: 100%;
+  height: auto;
   background-color: #fff;
+  border-radius: 10px;
 `;
 
-const IconView = styled.View`
-  width: 50px;
-  height: 50px;
-  border-radius: 25px;
-  background-color: #fff;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid #e8eaed;
+const MapContainer = styled.View`
+  width: 100%;
+  height: 150px;
+  border-radius: 20px;
+  overflow: hidden;
+  margin-top: 20px;
 `;
 
-const Title = styled.Text`
-  font-size: 20px;
+const HoustInfoTitle = styled.Text`
+  width: 100%;
+  font-size: ${getFontSize(20)}px;
   font-family: Pretendard-Bold;
   color: #1b1c1f;
-  line-height: 30px;
-  margin-bottom: 8px;
-  margin-top: 20px;
-  letter-spacing: -0.5px;
+  line-height: 24px;
+  margin-bottom: 7px;
+  margin-top: 4px;
 `;
 
-const SubTitle = styled.Text`
-  font-size: 13px;
+const HoustInfoText = styled.Text`
+  font-size: ${getFontSize(12)}px;
   font-family: Pretendard-Regular;
-  color: #a3a5a8;
-  line-height: 25px;
-  margin-top: 10px;
+  color: #717274;
+  line-height: 20px;
+`;
+
+const HoustInfoBadge = styled.View`
+  width: auto;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 11px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  margin-right: auto;
+`;
+
+const HoustInfoBadgeText = styled.Text`
+  font-size: ${getFontSize(10)}px;
+  font-family: Pretendard-Medium;
+  color: #fff;
+  line-height: 12px;
+  letter-spacing: -0.5px;
 `;
 
 const InputSection = styled.View`
@@ -80,54 +103,118 @@ const Label = styled.Text`
   margin-bottom: 10px;
 `;
 
-const DescText = styled.Text`
-  font-size: 10px;
-  font-family: Pretendard-Regular;
-  color: #a3a5a8;
-  line-height: 16px;
-  margin-bottom: 15px;
-`;
-
-const Button = styled.TouchableOpacity.attrs(props => ({
-  activeOpacity: 0.6,
-}))`
-  width: ${props => props.width - 40}px;
-  height: 60px;
-  border-radius: 30px;
-  background-color: #2f87ff;
-  align-items: center;
-  justify-content: center;
-  margin-top: 20px;
-  align-self: center;
-  position: absolute;
-  bottom: 50px;
-`;
-
-const ButtonText = styled.Text`
-  font-size: 18px;
-  font-family: Pretendard-Bold;
-  color: #fff;
-  line-height: 20px;
-`;
-
-const InputContainer = styled.View`
-  flex-direction: row;
+const HouseSection = styled.View`
   width: 100%;
-  height: 45px;
-  background-color: #f5f7fa;
-  border-radius: 5px;
+  height: auto;
+  background-color: #fff;
+  padding: 20px;
+`;
+
+const InfoContentSection = styled.View`
+  width: 100%;
+  height: auto;
+  background-color: #f7f8fa;
+  padding: 10px 20px;
+`;
+const InfoContentItem = styled.View`
+  width: 100%;
+  height: 56px;
+  background-color: #fff;
+  border-radius: 6px;
+  padding: 0 18px;
+  margin-bottom: 10px;
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  border-width: 1px;
+  border-color: #e8eaed;
 `;
 
-const OwnedHouseDetail = () => {
+const InfoContentLabel = styled.Text`
+  font-size: ${getFontSize(12)}px;
+  font-family: Pretendard-Regular;
+  color: #97989a;
+  line-height: 20px;
+  letter-spacing: -0.3px;
+`;
+
+const InfoContentText = styled.Text`
+  font-size: ${getFontSize(14)}px;
+  font-family: Pretendard-Medium;
+  color: #1b1c1f;
+  line-height: 20px;
+  margin-left: auto;
+  text-align: right;
+`;
+
+const OwnedHouseDetail = props => {
+  const {item, prevSheet} = props.route.params;
   const navigation = useNavigation();
   const {width, height} = useWindowDimensions();
-  const nameInputRef = useRef(null);
-  const phoneInputRef = useRef(null);
-  const relationInputRef = useRef(null);
-  const [selectBoxOpen, setSelectBoxOpen] = useState(false);
+  const [movingInRight, setMovingInRight] = useState(false);
+
+  const [location, setLocation] = useState({
+    latitude: 37.5326,
+    longitude: 127.024612,
+  });
+  const [data, setData] = useState(item);
+
+  useEffect(() => {
+    getHouseDetailInfo();
+  }, []);
+
+  const getHouseDetailInfo = async () => {
+    const url = 'http://13.125.194.154:8080/house/detail';
+
+    await axios
+      .get(url, {
+        params: {
+          houseId: item?.houseId ? item.houseId : '25',
+        },
+      })
+      .then(function (result) {
+        if (result.isError) {
+          Alert.alert('주택 정보가 없습니다.');
+          return;
+        }
+        getAPTLocation(result.data.data.roadnmAdr);
+        setData(result.data.data);
+        setMovingInRight(result.data.data.movingInRight);
+      })
+      .catch(function (error) {
+        console.log(error);
+      });
+  };
+
+  const getAPTLocation = async address => {
+    const API_KEY = 'e094e49e35c61a9da896785b6fee020a';
+    const config = {
+      headers: {
+        Authorization: `KakaoAK ${API_KEY}`,
+      },
+    }; // 헤더 설정
+    const url = `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURI(
+      address,
+    )}`;
+
+    await axios
+      .get(url, config)
+      .then(function (result) {
+        setLocation({
+          latitude: Number(result.data.documents[0].y),
+          longitude: Number(result.data.documents[0].x),
+        });
+      })
+      .catch(function (error) {
+        console.log(error);
+        SheetManager.show('info', {
+          payload: {
+            message: '주소를 찾을 수 없습니다.',
+            type: 'error',
+          },
+        });
+      });
+  };
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -137,11 +224,47 @@ const OwnedHouseDetail = () => {
           hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
           onPress={() => {
             navigation.goBack();
+            if (!props.route.params?.prevSheet) return;
+            console.log(props.route.params?.prevSheet);
+            SheetManager.show(props.route.params?.prevSheet, {
+              payload: {
+                navigation,
+              },
+            });
           }}>
           <BackIcon />
         </TouchableOpacity>
       ),
-      title: '가족 주택 등록하기',
+      headerRight: () => (
+        <TouchableOpacity
+          activeOpacity={0.6}
+          hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
+          onPress={() => {
+            SheetManager.show('delete', {
+              payload: {
+                title: '주택 삭제',
+                navigation,
+                content: '주택을 삭제하시겠습니까?',
+                confirmText: '삭제',
+                cancelText: '취소',
+                item,
+                prevSheet,
+              },
+            });
+          }}>
+          <Text
+            style={{
+              fontFamily: 'Pretendard-Regular',
+              fontSize: getFontSize(13),
+              color: '#FF7401',
+              letterSpacing: -0.3,
+            }}>
+            주택 삭제
+          </Text>
+        </TouchableOpacity>
+      ),
+      headerTitleAlign: 'center',
+      title: '보유 주택 상세 정보',
       headerShadowVisible: false,
       contentStyle: {
         borderTopWidth: 0,
@@ -153,130 +276,231 @@ const OwnedHouseDetail = () => {
         letterSpacing: -0.8,
       },
     });
-  }, []);
+  }, [props.route.params?.prevSheet]);
+
+  useEffect(() => {
+    // 하드웨어 백 버튼 핸들러 정의
+    const handleBackPress = () => {
+      navigation.goBack();
+      if (props.route.params?.prevSheet) {
+        SheetManager.show(props.route.params.prevSheet, {
+          payload: {
+            navigation,
+          },
+        });
+      }
+      return true; // 이벤트를 여기서 처리했음을 나타냄
+    };
+
+    // 이벤트 리스너 추가
+    BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      BackHandler.removeEventListener('hardwareBackPress', handleBackPress);
+    };
+  }, [navigation, props.route.params]); // 의존성 배열에 navigation과 params 추가
 
   return (
     <Container>
       <KeyboardAwareScrollView
         contentContainerStyle={{
-          paddingBottom: 160,
+          paddingBottom: 20,
         }}>
         <>
-          <IntroSection>
-            <IconView>
-              <FamilyIcon />
-            </IconView>
-            <Title>
-              가족이 소유한 주택도 불러올 수 있어요{'\n'}아래 정보들을 입력 후
-              요청해주세요
-            </Title>
-            <SubTitle>
-              요청받은 가족의 카카오톡으로 본인인증 메시지가 도착해요!
-            </SubTitle>
-          </IntroSection>
-
+          <HouseSection>
+            <HoustInfoSection>
+              <HoustInfoBadge
+                style={{
+                  backgroundColor: HOUSE_TYPE.find(
+                    color => color.id === item.houseType,
+                  ).color,
+                }}>
+                <HoustInfoBadgeText>
+                  {HOUSE_TYPE.find(color => color.id === item.houseType).name}
+                </HoustInfoBadgeText>
+              </HoustInfoBadge>
+              <HoustInfoTitle>{data?.houseName}</HoustInfoTitle>
+              <HoustInfoText>{data?.houseDetailName}</HoustInfoText>
+            </HoustInfoSection>
+            <MapContainer>
+              <NaverMapView
+                style={{
+                  flex: 1,
+                  width: width - 40,
+                  height: 150,
+                  borderRadius: 20,
+                }}
+                showsMyLocationButton={false}
+                center={{...location, zoom: 16}}
+                zoomControl={false}
+                rotateGesturesEnabled={false}
+                scrollGesturesEnabled={false}
+                pitchEnabled={false}
+                zoomEnabled={false}
+                isHideCollidedSymbols
+                isForceShowIcon
+                isHideCollidedCaptions>
+                <Marker
+                  coordinate={location}
+                  width={50}
+                  height={50}
+                  onClick={() => console.warn('onClick! p2')}>
+                  <View>
+                    <DropShadow
+                      style={{
+                        shadowColor: 'rgba(0,0,0,0.25)',
+                        shadowOffset: {
+                          width: 0,
+                          height: 4,
+                        },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 4,
+                      }}>
+                      <Image
+                        source={require('../../assets/images/map_area_ico.png')}
+                        style={{
+                          width: 50,
+                          height: 50,
+                        }}
+                      />
+                    </DropShadow>
+                  </View>
+                </Marker>
+              </NaverMapView>
+            </MapContainer>
+          </HouseSection>
+          <InfoContentSection>
+            <InfoContentItem>
+              <InfoContentLabel>주택유형</InfoContentLabel>
+              <InfoContentText>
+                {HOUSE_TYPE.find(color => color.id === item.houseType).name}
+              </InfoContentText>
+            </InfoContentItem>
+            <InfoContentItem>
+              <InfoContentLabel>주소</InfoContentLabel>
+              <InfoContentText>{data?.roadnmAdr}</InfoContentText>
+            </InfoContentItem>
+            <InfoContentItem>
+              <InfoContentLabel>상세주소</InfoContentLabel>
+              <InfoContentText>{data?.detailAdr}</InfoContentText>
+            </InfoContentItem>
+            <InfoContentItem>
+              <InfoContentLabel>동호수</InfoContentLabel>
+              <InfoContentText>{data?.houseDetailName}</InfoContentText>
+            </InfoContentItem>
+            <InfoContentItem>
+              <InfoContentLabel>공시지가</InfoContentLabel>
+              <InfoContentText>
+                {Number(data?.pubLandPrice)?.toLocaleString()} 원
+              </InfoContentText>
+            </InfoContentItem>
+            <InfoContentItem>
+              <InfoContentLabel>KB시세</InfoContentLabel>
+              <InfoContentText>
+                {Number(data?.kbMktPrice)?.toLocaleString()} 원
+              </InfoContentText>
+            </InfoContentItem>
+            <InfoContentItem>
+              <InfoContentLabel>전용면적</InfoContentLabel>
+              <View
+                style={{
+                  marginLeft: 'auto',
+                }}>
+                <InfoContentText>{data?.areaPyung}평형</InfoContentText>
+                <InfoContentText
+                  style={{
+                    fontSize: 10,
+                    color: '#A3A5A8',
+                  }}>
+                  {data?.areaMeter}m2
+                </InfoContentText>
+              </View>
+            </InfoContentItem>
+          </InfoContentSection>
           <InputSection>
             <Paper>
-              <Label>요청자명</Label>
-              <DescText>
-                가족에게 불러오기 요청을 하기 위해 고객님의 성명을 입력해주세요.
-              </DescText>
-              <InputContainer>
-                <TextInput
-                  ref={nameInputRef}
-                  placeholder="성명을 입력해주세요"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    fontFamily: 'Pretendard-Regular',
-                    fontSize: 13,
-                    color: '#1B1C1F',
-                  }}
-                  underlineColorAndroid={'transparent'}
-                  keyboardType="default"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="다음"
-                  onSubmitEditing={() => {}}
-                />
-              </InputContainer>
-            </Paper>
-            <Paper>
-              <Label>가족 휴대폰 번호</Label>
-              <DescText>
-                주택 보유현황을 가져올 가족의 휴대폰번호를 입력해주세요.
-              </DescText>
-              <InputContainer>
-                <TextInput
-                  ref={nameInputRef}
-                  placeholder="휴대폰 번호를 입력해주세요"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    fontFamily: 'Pretendard-Regular',
-                    fontSize: 13,
-                    color: '#1B1C1F',
-                  }}
-                  underlineColorAndroid={'transparent'}
-                  keyboardType="default"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="다음"
-                  onSubmitEditing={() => {
-                    nameInputRef.current.focus();
-                  }}
-                />
-              </InputContainer>
-            </Paper>
-            <Paper>
-              <Label>요청자와의 관계</Label>
-              <DescText>
-                주택 보유현황을 가져올 가족과의 관계를 선택해주세요.
-              </DescText>
-              <Pressable
-                onPress={() => {
-                  setSelectBoxOpen(!selectBoxOpen);
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 10,
+                  justifyContent: 'space-between',
                 }}>
-                <InputContainer>
-                  <Text
-                    style={{
-                      width: '70%',
-                      fontFamily: 'Pretendard-Regular',
-                      fontSize: 13,
-                      color: '#1B1C1F',
-                    }}>
-                    배우자
-                  </Text>
-                  <ChevronIcon
-                    style={{
-                      transform: [{rotate: selectBoxOpen ? '180deg' : '0deg'}],
-                    }}
-                  />
-                </InputContainer>
-              </Pressable>
+                <Label
+                  style={{
+                    marginBottom: 0,
+                  }}>
+                  소유자
+                </Label>
+              </View>
+
+              <InfoContentItem>
+                <InfoContentLabel
+                  style={{
+                    color: '#1B1C1F',
+                    fontSize: getFontSize(14),
+                  }}>
+                  본인
+                </InfoContentLabel>
+                <InfoContentText>
+                  {Number(data?.ownerCnt) > 1 && (
+                    <Text
+                      style={{
+                        color: '#B5283B',
+                      }}>
+                      공동명의{'  '}
+                    </Text>
+                  )}
+                  {data?.userProportion}%
+                </InfoContentText>
+              </InfoContentItem>
+              {Number(data?.ownerCnt) > 1 &&
+                new Array(Number(data?.ownerCnt) - 1)
+                  .fill(0)
+                  .map((item, index) => (
+                    <InfoContentItem>
+                      <InfoContentLabel
+                        style={{
+                          color: '#1B1C1F',
+                          fontSize: getFontSize(14),
+                        }}>
+                        소유자{index + 1}
+                      </InfoContentLabel>
+                      <InfoContentText>
+                        <Text
+                          style={{
+                            color: '#B5283B',
+                          }}>
+                          공동명의{'  '}
+                        </Text>
+                        {data[`owner${index + 1}Proportion`]}%
+                      </InfoContentText>
+                    </InfoContentItem>
+                  ))}
             </Paper>
+            <InfoContentItem>
+              <InfoContentLabel>입주권 여부</InfoContentLabel>
+              <Switch
+                width={50}
+                height={28}
+                value={movingInRight}
+                circleStyle={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 12,
+                  backgroundColor: '#fff',
+                }}
+                onValueChange={isSwitchOn => {
+                  setMovingInRight(isSwitchOn);
+                }}
+                activeColor="#2F87FF"
+                disabledColor="#E8EAED"
+              />
+            </InfoContentItem>
           </InputSection>
         </>
       </KeyboardAwareScrollView>
-
-      <DropShadow
-        style={{
-          shadowColor: 'rgba(0,0,0,0.25)',
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          shadowOpacity: 1,
-          shadowRadius: 4,
-        }}>
-        <Button
-          width={width}
-          onPress={() => {
-            navigation.push('DoneResisterFamilyHouse');
-          }}>
-          <ButtonText>요청하기</ButtonText>
-        </Button>
-      </DropShadow>
     </Container>
   );
 };

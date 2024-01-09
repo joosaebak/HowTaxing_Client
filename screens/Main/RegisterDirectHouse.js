@@ -1,14 +1,15 @@
+// 직접 등록하기 화면
+
 import {
   View,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
   TextInput,
-  Pressable,
   ScrollView,
+  BackHandler,
 } from 'react-native';
 import React, {useEffect, useState, useLayoutEffect, useRef} from 'react';
-import {useNavigation} from '@react-navigation/native';
+import {useIsFocused, useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
 import DropShadow from 'react-native-drop-shadow';
@@ -21,6 +22,10 @@ import HouseIcon from '../../assets/icons/house/house.svg';
 import VillaIcon from '../../assets/icons/house/villa.svg';
 import SearchIcon from '../../assets/icons/search_ico.svg';
 import KeyIcon from '../../assets/images/family_key.svg';
+import {useDispatch, useSelector} from 'react-redux';
+import {SheetManager} from 'react-native-actions-sheet';
+import {setOwnHouseList} from '../../redux/ownHouseListSlice';
+import {setDirectRegister} from '../../redux/directRegisterSlice';
 
 const Container = styled.View`
   flex: 1;
@@ -61,6 +66,7 @@ const SubTitle = styled.Text`
   color: #a3a5a8;
   line-height: 25px;
   margin-top: 10px;
+  margin-bottom: 20px;
 `;
 
 const InputSection = styled.View`
@@ -75,7 +81,7 @@ const Paper = styled.View`
   background-color: #fff;
   border-radius: 5px;
   margin-bottom: 10px;
-  padding: 20px;
+  padding: 20px 0;
   border: 1px solid #e8eaed;
 `;
 
@@ -85,6 +91,7 @@ const Label = styled.Text`
   color: #1b1c1f;
   line-height: 16px;
   margin-bottom: 10px;
+  margin-left: 20px;
 `;
 
 const DescText = styled.Text`
@@ -93,6 +100,7 @@ const DescText = styled.Text`
   color: #a3a5a8;
   line-height: 16px;
   margin-bottom: 15px;
+  margin-left: 20px;
 `;
 
 const Button = styled.TouchableOpacity.attrs(props => ({
@@ -101,31 +109,30 @@ const Button = styled.TouchableOpacity.attrs(props => ({
   width: ${props => props.width - 40}px;
   height: 60px;
   border-radius: 30px;
-  background-color: #2f87ff;
+  background-color: ${props => (props.active ? '#2f87ff' : '#e8eaed')};
   align-items: center;
   justify-content: center;
   margin-top: 20px;
   align-self: center;
-  position: absolute;
-  bottom: 50px;
 `;
 
 const ButtonText = styled.Text`
   font-size: 18px;
   font-family: Pretendard-Bold;
-  color: #fff;
+  color: ${props => (props.active ? '#fff' : '#a3a5a8')};
   line-height: 20px;
 `;
 
 const InputContainer = styled.View`
   flex-direction: row;
-  width: 100%;
+  width: ${props => props.width - 80}px;
   height: 45px;
   background-color: #f5f7fa;
   border-radius: 5px;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
+  align-self: center;
 `;
 
 const SelectButton = styled.Pressable`
@@ -148,13 +155,23 @@ const SelectButtonText = styled.Text`
   margin-top: 8px;
 `;
 
-const RegisterDirectHouse = () => {
+const RegisterDirectHouse = props => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
+  const isFocused = useIsFocused();
   const {width, height} = useWindowDimensions();
   const addressInputRef = useRef(null);
   const addressDetailInputRef = useRef(null);
-  const [selectBoxOpen, setSelectBoxOpen] = useState(false);
-  const [selectedHouseType, setSelectedHouseType] = useState(null);
+  const [selectedHouseType, setSelectedHouseType] = useState('1');
+
+  const [data, setData] = useState(null);
+  const ownHouseList = useSelector(state => state.ownHouseList.value);
+  const currentUser = useSelector(state => state.currentUser.value);
+  const [prevChat, setPrevChat] = useState(null);
+  const [prevSheet, setPrevSheet] = useState(null);
+  const {houseName, address, addressDetail} = useSelector(
+    state => state.directRegister.value,
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -164,10 +181,18 @@ const RegisterDirectHouse = () => {
           hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
           onPress={() => {
             navigation.goBack();
+            dispatch(
+              setDirectRegister({
+                houseName: '',
+                address: '',
+                addressDetail: '',
+              }),
+            );
           }}>
           <BackIcon />
         </TouchableOpacity>
       ),
+      headerTitleAlign: 'center',
       title: '직접 등록하기',
       headerShadowVisible: false,
       contentStyle: {
@@ -182,24 +207,56 @@ const RegisterDirectHouse = () => {
     });
   }, []);
 
+  useEffect(() => {
+    if (props.route.params?.prevChat) {
+      setPrevChat(props.route.params?.prevChat);
+    }
+    if (props.route.params?.prevSheet) {
+      setPrevSheet(props.route.params?.prevSheet);
+    }
+  }, []);
+
+  useEffect(() => {
+    // 하드웨어 백 버튼 핸들러 정의
+    const handleBackPress = () => {
+      navigation.goBack();
+      dispatch(
+        setDirectRegister({
+          houseName: '',
+          address: '',
+          addressDetail: '',
+        }),
+      );
+      return true;
+    };
+
+    // 이벤트 리스너 추가
+    BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      BackHandler.removeEventListener('hardwareBackPress', handleBackPress);
+    };
+  }, [navigation, props.route.params]); // 의존성 배열에 navigation과 params 추가
+
   const HOUSE_TYPE = [
     {
-      id: 'apartment',
+      id: '1',
       name: '아파트',
       icon: <BuildingIcon1 />,
     },
     {
-      id: 'house',
+      id: '4',
       name: '단독주택 · 다가구',
       icon: <HouseIcon />,
     },
     {
-      id: 'villa',
+      id: '2',
       name: '연립 · 다세대',
       icon: <VillaIcon />,
     },
     {
-      id: 'ticket',
+      id: '3',
       name: '입주권',
       icon: <BuildingIcon2 />,
     },
@@ -209,10 +266,10 @@ const RegisterDirectHouse = () => {
     <Container>
       <KeyboardAwareScrollView
         contentContainerStyle={{
-          paddingBottom: 160,
+          paddingBottom: 60,
         }}>
-        <>
-          <IntroSection>
+        <View>
+          <InputSection>
             <IconView>
               <KeyIcon />
             </IconView>
@@ -224,15 +281,17 @@ const RegisterDirectHouse = () => {
               요청받은 가족의 휴대폰에 주세박이 설치되어있지 않다면{'\n'}
               카카오톡으로 설치 안내 메시지가 동시에 전달됩니다
             </SubTitle>
-          </IntroSection>
-
-          <InputSection>
             <Paper>
               <Label>주택 형태</Label>
               <DescText>
                 등록하실 주택이 아파트인지, 그 외 주택 형태인지 선택해주세요.
               </DescText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: 20,
+                }}>
                 {HOUSE_TYPE.map((item, index) => (
                   <SelectButton
                     key={item.id}
@@ -246,21 +305,35 @@ const RegisterDirectHouse = () => {
                 ))}
               </ScrollView>
             </Paper>
-            <Paper>
+            <Paper
+              style={{
+                paddingHorizontal: 20,
+              }}>
               <Label>주소 정보</Label>
               <DescText>
                 등록하려는 주택의 주소를 검색하여 선택해주세요.
               </DescText>
-              <InputContainer>
+              <InputContainer width={width}>
                 <TextInput
                   ref={addressInputRef}
                   placeholder="주소를 검색해주세요"
+                  placeholderTextColor={'#A3A5A8'}
                   style={{
                     width: '90%',
                     height: '100%',
                     fontFamily: 'Pretendard-Regular',
                     fontSize: 13,
                     color: '#1B1C1F',
+                  }}
+                  value={address}
+                  onChangeText={text => {
+                    dispatch(
+                      setDirectRegister({
+                        houseName,
+                        address: text,
+                        addressDetail,
+                      }),
+                    );
                   }}
                   underlineColorAndroid={'transparent'}
                   keyboardType="default"
@@ -269,6 +342,28 @@ const RegisterDirectHouse = () => {
                   returnKeyType="next"
                   onSubmitEditing={() => {
                     addressDetailInputRef.current.focus();
+                  }}
+                  onFocus={() => {
+                    console.log('focus', selectedHouseType);
+                    if (selectedHouseType === '1') {
+                      SheetManager.show('mapViewList2', {
+                        payload: {
+                          prevScreen: 'RegisterDirectHouse',
+                          prevChat: props.route.params?.prevChat,
+                          prevSheet: props.route.params?.prevSheet,
+                          navigation: navigation,
+                        },
+                      });
+                    } else {
+                      SheetManager.show('searchHouse2', {
+                        payload: {
+                          prevScreen: 'RegisterDirectHouse',
+                          prevChat: props.route.params?.prevChat,
+                          prevSheet: props.route.params?.prevSheet,
+                          navigation: navigation,
+                        },
+                      });
+                    }
                   }}
                 />
                 <TouchableOpacity
@@ -280,17 +375,37 @@ const RegisterDirectHouse = () => {
                     right: 20,
                   }}
                   onPress={() => {
-                    navigation.push('SearchAddress');
+                    if (selectedHouseType === '1') {
+                      SheetManager.show('mapViewList2', {
+                        payload: {
+                          prevScreen: 'RegisterDirectHouse',
+                          prevChat: props.route.params?.prevChat,
+                          prevSheet: props.route.params?.prevSheet,
+                          navigation: navigation,
+                        },
+                      });
+                    } else {
+                      SheetManager.show('searchHouse2', {
+                        payload: {
+                          prevScreen: 'RegisterDirectHouse',
+                          prevChat: props.route.params?.prevChat,
+                          prevSheet: props.route.params?.prevSheet,
+                          navigation: navigation,
+                        },
+                      });
+                    }
                   }}>
                   <SearchIcon />
                 </TouchableOpacity>
               </InputContainer>
               <InputContainer
+                width={width}
                 style={{
                   marginTop: 10,
                 }}>
                 <TextInput
                   ref={addressDetailInputRef}
+                  placeholderTextColor={'#A3A5A8'}
                   placeholder="상세주소"
                   style={{
                     width: '100%',
@@ -299,39 +414,82 @@ const RegisterDirectHouse = () => {
                     fontSize: 13,
                     color: '#1B1C1F',
                   }}
+                  value={addressDetail}
+                  onChangeText={text => {
+                    dispatch(
+                      setDirectRegister({
+                        houseName,
+                        address,
+                        addressDetail: text,
+                      }),
+                    );
+                  }}
                   underlineColorAndroid={'transparent'}
                   keyboardType="default"
                   autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="next"
-                  onSubmitEditing={() => {
-                    addressInputRef.current.focus();
-                  }}
                 />
               </InputContainer>
             </Paper>
           </InputSection>
-        </>
-      </KeyboardAwareScrollView>
+          <DropShadow
+            style={{
+              shadowColor: 'rgba(0,0,0,0.25)',
+              shadowOffset: {
+                width: 0,
+                height: 4,
+              },
+              shadowOpacity: 0.15,
+              shadowRadius: 4,
+            }}>
+            <Button
+              active={selectedHouseType && address && addressDetail}
+              width={width}
+              onPress={async () => {
+                await dispatch(
+                  setOwnHouseList([
+                    ...ownHouseList,
+                    {
+                      houseId: '222',
+                      userId: currentUser?.userId,
+                      houseType: HOUSE_TYPE.find(
+                        el => el.id === selectedHouseType,
+                      ).id,
+                      houseName: houseName,
+                      houseDetailName: addressDetail,
+                    },
+                  ]),
+                );
 
-      <DropShadow
-        style={{
-          shadowColor: 'rgba(0,0,0,0.25)',
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          shadowOpacity: 1,
-          shadowRadius: 4,
-        }}>
-        <Button
-          width={width}
-          onPress={() => {
-            navigation.push('DoneResisterFamilyHouse');
-          }}>
-          <ButtonText>요청하기</ButtonText>
-        </Button>
-      </DropShadow>
+                navigation.navigate(prevChat);
+                setTimeout(() => {
+                  SheetManager.show(
+                    prevSheet ? prevSheet : props.route.params?.prevSheet,
+                    {
+                      payload: {
+                        navigation,
+                      },
+                    },
+                  );
+                }, 300);
+                dispatch(
+                  setDirectRegister({
+                    houseName: '',
+                    address: '',
+                    addressDetail: '',
+                  }),
+                );
+              }}>
+              <ButtonText
+                disabled={!selectedHouseType || !address || !addressDetail}
+                active={selectedHouseType && address && addressDetail}>
+                등록하기
+              </ButtonText>
+            </Button>
+          </DropShadow>
+        </View>
+      </KeyboardAwareScrollView>
     </Container>
   );
 };

@@ -1,5 +1,7 @@
-import {View, Text, TouchableOpacity, useWindowDimensions} from 'react-native';
-import React, {useEffect, useState, useLayoutEffect} from 'react';
+// 취득세 홈페이지
+
+import {TouchableOpacity, useWindowDimensions} from 'react-native';
+import React, {useLayoutEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
@@ -7,7 +9,6 @@ import HomeIcon from '../../assets/images/home_home_lg.svg';
 import FastImage from 'react-native-fast-image';
 import DropShadow from 'react-native-drop-shadow';
 import getFontSize from '../../utils/getFontSize';
-import {registerSheet, SheetManager} from 'react-native-actions-sheet';
 
 const Container = styled.View`
   flex: 1;

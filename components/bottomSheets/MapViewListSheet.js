@@ -1,14 +1,18 @@
+// 챗 스크린에서 아파트 단지 선택 시 아파트 동과 호를 선택하는 시트
+
 import {
   View,
   Text,
   useWindowDimensions,
   FlatList,
-  TouchableOpacity,
   Pressable,
+  Platform,
+  Alert,
+  StyleSheet,
+  ScrollView,
 } from 'react-native';
-import React, {useRef, useState, useEffect} from 'react';
+import React, {useRef, useState, useEffect, useMemo} from 'react';
 import ActionSheet, {
-  ActionSheetRef,
   SheetManager,
   useScrollHandlers,
 } from 'react-native-actions-sheet';
@@ -16,17 +20,17 @@ import styled from 'styled-components';
 import getFontSize from '../../utils/getFontSize';
 import CloseIcon from '../../assets/icons/close_button.svg';
 import SerchIcon from '../../assets/icons/search_map.svg';
-
-import NaverMapView, {
-  Circle,
-  Marker,
-  Path,
-  Polyline,
-  Polygon,
-  Callout,
-} from 'react-native-nmap';
+import WheelPicker from 'react-native-wheely';
+import NaverMapView, {Marker} from 'react-native-nmap';
 import DropShadow from 'react-native-drop-shadow';
-import {Picker, DatePicker} from 'react-native-wheel-pick';
+import Geolocation from '@react-native-community/geolocation';
+import LocationIcon from '../../assets/icons/my_location_ico.svg';
+import axios from 'axios';
+import {useDispatch, useSelector} from 'react-redux';
+import {check, PERMISSIONS, RESULTS, request} from 'react-native-permissions';
+import {setHouseInfo} from '../../redux/houseInfoSlice';
+import {setChatDataList} from '../../redux/chatDataListSlice';
+import MapView from '../MapView';
 
 const SheetContainer = styled.View`
   flex: 1;
@@ -56,7 +60,7 @@ const ModalAddressInputContainer = styled.View`
 
 const ModalAddressInput = styled.TextInput.attrs(props => ({
   placeholderTextColor: '#A3A5A8',
-  placeholder: '주택명 혹은 지역명을 입력해주세요',
+  placeholder: '아파트명 혹은 지역명을 입력해주세요',
 }))`
   flex: 1;
   font-size: ${getFontSize(13)}px;
@@ -73,38 +77,20 @@ const ModalInputButton = styled.TouchableOpacity.attrs(props => ({
   justify-content: center;
 `;
 
-const ModalLabel = styled.Text`
-  font-size: 15px;
-  font-family: Pretendard-SemiBold;
-  color: #000;
-  line-height: 18px;
-  margin-right: 6px;
-`;
-
 const ModalInputSection = styled.View`
   width: 100%;
   height: auto;
-  margin-top: 10px;
+  margin-top: 0px;
   background-color: #fff;
 `;
 
 const ModalHeader = styled.View`
   width: 100%;
-  height: 36px;
+  height: 50px;
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 10px;
-`;
-
-const MapMarkerShadow = styled(DropShadow)`
-  shadow-color: #2f87ff;
-  shadow-offset: {
-    width: 0;
-    height: 6;
-  }
-  shadow-opacity: 0.6;
-  shadow-radius: 4;
+  padding: 0px 20px;
 `;
 
 const MapSearchResultHeader = styled.View`
@@ -202,6 +188,7 @@ const ApartmentInfoGroup = styled.View`
 `;
 
 const ApartmentInfoTitle = styled.Text`
+  width: 80%;
   font-size: ${getFontSize(16)}px;
   font-family: Pretendard-Medium;
   color: #1b1c1f;
@@ -215,7 +202,7 @@ const SelectGroup = styled.View`
   align-items: center;
   justify-content: space-between;
   margin-top: 10px;
-  padding: 10px;
+  padding: 10px 20px;
 `;
 
 const SelectLabel = styled.Text`
@@ -245,17 +232,6 @@ const ButtonSection = styled.View`
   padding: 10px;
 `;
 
-const ButtonShadow = styled(DropShadow)`
-  width: 48%;
-  shadow-color: #000;
-  shadow-offset: {
-    width: 0;
-    height: 10;
-  }
-  shadow-opacity: 0.25;
-  shadow-radius: 4px;
-`;
-
 const Button = styled.TouchableOpacity.attrs(props => ({
   activeOpacity: 0.8,
 }))`
@@ -276,18 +252,448 @@ const ButtonText = styled.Text`
   line-height: 20px;
 `;
 
+const MyLocationButton = styled.TouchableOpacity.attrs(props => ({
+  activeOpacity: 0.6,
+}))`
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: #fff;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1;
+`;
+
 const MapViewListSheet = props => {
   const actionSheetRef = useRef(null);
   const scrollViewRef = useRef(null);
-  const newMessageTrigger = props.payload.newMessageTrigger;
+  const mapRef = useRef(null);
+  const dispatch = useDispatch();
+  const chatDataList = useSelector(state => state.chatDataList.value);
+  const houseInfo = useSelector(state => state.houseInfo.value);
   const {width, height} = useWindowDimensions();
-  const [hideHeader, setHideHeader] = useState(false);
-  const P0 = {latitude: 37.564362, longitude: 126.977011};
-  const P1 = {latitude: 37.565051, longitude: 126.978567};
-  const P2 = {latitude: 37.565383, longitude: 126.976292};
   const scrollHandlers = useScrollHandlers('FlatList-1', actionSheetRef);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  console.log(props.payload.newMessageTrigger);
+  const [listData, setListData] = useState([]);
+  const [selectedItem, setSelectedItem] = useState('');
+  const [selectedDong, setSelectedDong] = useState('');
+  const [selectedHo, setSelectedHo] = useState(null);
+  const [dongList, setDongList] = useState(['']);
+  const [hoList, setHoList] = useState([]);
+  const [searchText, setSearchText] = useState('');
+  const [zoom, setZoom] = useState(20);
+  const [addressArea, setAddressArea] = useState('');
+  const [isMapInit, setIsMapInit] = useState(false);
+
+  const [myPosition, setMyPosition] = useState({
+    latitude: 37.5665,
+    longitude: 126.978,
+  });
+
+  // 위치 권한 체크
+  const checkAndGetCurrentLocation = async () => {
+    const permission =
+      Platform.OS === 'android'
+        ? PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
+        : PERMISSIONS.IOS.LOCATION_WHEN_IN_USE;
+    let result = await check(permission);
+
+    if (result === RESULTS.BLOCKED || result === RESULTS.DENIED) {
+      result = await request(permission);
+    }
+
+    if (result === RESULTS.GRANTED) {
+      console.log('checkAndGetCurrentLocation');
+    }
+  };
+
+  useEffect(() => {
+    checkAndGetCurrentLocation();
+  }, []);
+
+  // 위치 권한 요청
+  const requestLocationPermission = async () => {
+    const permissionType =
+      Platform.OS === 'android'
+        ? PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
+        : PERMISSIONS.IOS.LOCATION_WHEN_IN_USE;
+
+    const result = await check(permissionType);
+    if (result === RESULTS.GRANTED) {
+      return true;
+    }
+
+    if (result === RESULTS.BLOCKED || result === RESULTS.DENIED) {
+      const response = await request(permissionType);
+      return response === RESULTS.GRANTED;
+    }
+
+    return false;
+  };
+
+  // 현재 위치 가져오기
+  const getCurrentLocation = () => {
+    console.log('getCurrentLocation');
+    Geolocation.getCurrentPosition(
+      info => {
+        const {latitude, longitude} = info.coords;
+        setMyPosition({
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+        });
+        getCurrentDistrict(Number(longitude), Number(latitude));
+        setZoom(16);
+      },
+      console.error,
+      {
+        enableHighAccuracy: false,
+        timeout: 2000,
+      },
+    );
+  };
+
+  // 위치 권한 요청
+  useEffect(() => {
+    requestLocationPermission().then(permissionGranted => {
+      if (permissionGranted) {
+        getCurrentLocation();
+      } else {
+        console.error('Location permission denied');
+      }
+    });
+  }, []);
+
+  // 검색 텍스트 변경 시 리스트 초기화
+  useEffect(() => {
+    setListData([]);
+  }, [searchText]);
+
+  // 아파트 명 검색
+  const getAddress = async () => {
+    try {
+      const API_KEY = 'U01TX0FVVEgyMDIzMTIxNDE2MDk0NTExNDM1NzY=';
+      const url = `https://business.juso.go.kr/addrlink/addrLinkApiJsonp.do?confmKey=${API_KEY}&currentPage=0&countPerPage=1&keyword=${encodeURI(
+        searchText,
+      )}&resultType=json`;
+
+      const response = await axios.get(url);
+      const extractedData = response.data.match(/\(.*\)/s)[0];
+      const parsedData = JSON.parse(
+        extractedData.substring(1, extractedData.length - 1),
+      );
+
+      if (parsedData.results.common.errorCode !== '0') {
+        SheetManager.show('info', {
+          payload: {
+            message: parsedData.results.common.errorMessage,
+            type: 'error',
+          },
+        });
+      }
+
+      if (!parsedData.results.juso[0]) {
+        SheetManager.show('info', {
+          payload: {
+            message: '검색 결과가 없습니다.',
+            type: 'error',
+          },
+        });
+      }
+
+      const location = await getAPTLocation({
+        ADRES: parsedData.results.juso[0].roadAddr,
+      });
+      setMyPosition({
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+      });
+    } catch (error) {
+      console.error(error);
+      SheetManager.show('info', {
+        payload: {message: error.message, type: 'error'},
+      });
+    }
+  };
+
+  // 현재 위치의 동 가져오기
+  const getCurrentDistrict = async (longitude, latitude) => {
+    const API_KEY = 'e094e49e35c61a9da896785b6fee020a';
+    const config = {
+      headers: {
+        Authorization: `KakaoAK ${API_KEY}`,
+      },
+    };
+    const url = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${longitude}&y=${latitude}&input_coord=WGS84`;
+
+    const address_data = await axios
+      .get(url, config)
+      .then(function (result) {
+        // API호출
+        return result.data.documents[0];
+      })
+      .catch(function (error) {
+        console.log(error);
+      });
+
+    if (
+      address_data.region_2depth_name &&
+      address_data.region_2depth_name.includes('구')
+    ) {
+      const address_name =
+        address_data.region_2depth_name.replace('시 ', '') +
+        ' ' +
+        address_data.region_3depth_name;
+      if (addressArea !== address_name) {
+        setAddressArea(address_name);
+        getAddressInfo(address_name, latitude, longitude);
+        return;
+      }
+    } else {
+      const address_name = address_data.address_name;
+      if (addressArea !== address_name) {
+        setAddressArea(address_name);
+        getAddressInfo(address_name, latitude, longitude);
+        return;
+      }
+    }
+  };
+
+  // 해당 동에 속하는 아파트 정보 가져오기
+  const getAddressInfo = async (address, latitude, longitude) => {
+    const API_KEY =
+      'ZWYbv%2BOs9rH3SOjqQZdcBDDXV4k6EasX9%2BswAK7H9yHd5L6U6CNyS2L1p2q0r%2BglE2sXxryzWReJ8fvRaGNgEQ%3D%3D';
+
+    const url = `https://api.odcloud.kr/api/AptIdInfoSvc/v1/getAptInfo?page=1&perPage=100&returnType=json&cond%5BADRES%3A%3ALIKE%5D=${address}&serviceKey=${API_KEY}`;
+
+    try {
+      const response = await axios.get(url);
+      console.log('response', response.data.data);
+      const aptList = response.data.data.filter(el => el.COMPLEX_GB_CD === '1');
+
+      const locations = [];
+      for (const apt_item of aptList) {
+        const location = await getAPTLocation(apt_item);
+        locations.push(location);
+      }
+
+      // 거리순 정렬
+      locations.sort((a, b) => {
+        const aDistance =
+          Math.pow(Number(a.latitude) - Number(latitude), 2) +
+          Math.pow(Number(a.longitude) - Number(longitude), 2);
+        const bDistance =
+          Math.pow(Number(b.latitude) - Number(latitude), 2) +
+          Math.pow(Number(b.longitude) - Number(longitude), 2);
+        return aDistance - bDistance;
+      });
+      console.log('locations', locations);
+
+      // 검색어가 포함된 아파트가 있으면 맨 위로 이동
+      if (searchText !== '') {
+        console.log(
+          'searchText',
+          searchText,
+          locations.findIndex(el =>
+            el.COMPLEX_NM1?.includes(searchText.trim()),
+          ) > -1,
+        );
+        const index = locations.findIndex(el =>
+          el.COMPLEX_NM1?.includes(searchText),
+        );
+        if (index > -1) {
+          console.log('index', index);
+          const item = locations[index];
+          locations.splice(index, 1);
+          locations.unshift(item);
+          setMyPosition({
+            latitude: Number(item.latitude),
+            longitude: Number(item.longitude),
+          });
+        }
+      }
+
+      if (locations.length === 0) {
+        SheetManager.show('info', {
+          payload: {
+            message: '검색 결과가 없습니다.',
+            type: 'error',
+          },
+        });
+        return;
+      }
+
+      if (locations.length > 0) {
+        setListData(locations);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+
+  // 아파트 위치 가져오기
+  const getAPTLocation = async apt_item => {
+    const API_KEY = 'e094e49e35c61a9da896785b6fee020a';
+    const config = {
+      headers: {
+        Authorization: `KakaoAK ${API_KEY}`,
+      },
+    }; // 헤더 설정
+    const url = `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURI(
+      apt_item.ADRES,
+    )}`;
+
+    const location = await axios
+      .get(url, config)
+      .then(function (result) {
+        // API호출
+
+        return {
+          latitude: result.data.documents[0]?.y,
+          longitude: result.data.documents[0]?.x,
+        };
+      })
+      .catch(function (error) {
+        console.log(error);
+        SheetManager.show('info', {
+          payload: {
+            message: '주소를 찾을 수 없습니다.',
+            type: 'error',
+          },
+        });
+      });
+
+    return {
+      ...location,
+      ...apt_item,
+    };
+  };
+
+  // 아파트 단지 정보 가져오기
+  const getDongInfo = async id => {
+    const API_KEY =
+      'ZWYbv%2BOs9rH3SOjqQZdcBDDXV4k6EasX9%2BswAK7H9yHd5L6U6CNyS2L1p2q0r%2BglE2sXxryzWReJ8fvRaGNgEQ%3D%3D';
+    const config = {
+      headers: {
+        Authorization: `${API_KEY}`,
+      },
+    }; // 헤더 설정
+
+    const url = `https://api.odcloud.kr/api/AptIdInfoSvc/v1/getDongInfo?page=1&perPage=1&cond%5BCOMPLEX_PK%3A%3AEQ%5D=${id}&serviceKey=${API_KEY}`;
+
+    await axios
+      .get(url, config)
+      .then(function (result) {
+        // API호출
+        const dongs = result.data.data.map(item => {
+          return item.DONG_NM1.replace('동', '');
+        });
+        setDongList(dongs);
+        const hos = result.data.data.map(item => {
+          const list = generateApartmentNumbers(item.GRND_FLR_CNT, 5);
+          return list;
+        });
+
+        setHoList(hos[0]);
+      })
+      .catch(function (error) {
+        console.log(error);
+      });
+  };
+
+  // 아파트 호수 생성
+  const generateApartmentNumbers = (totalFloors, totalLines) => {
+    const apartmentNumbers = [];
+
+    for (let floor = 1; floor <= totalFloors; floor++) {
+      for (let line = 1; line <= totalLines; line++) {
+        // 호수 생성 및 배열에 추가
+        const floorStr = String(floor); // 층을 두 자리 숫자로 변환
+        const lineStr = String(line).padStart(2, '0'); // 라인을 두 자리 숫자로 변환
+        const apartmentNumber = `${floorStr}${lineStr}`;
+        apartmentNumbers.push(apartmentNumber);
+      }
+    }
+
+    return apartmentNumbers;
+  };
+
+  // 아파트 단지 선택 시 상세 정보 가져오기
+  const getHouseDetailInfo = async () => {
+    const url = 'http://13.125.194.154:8080/house/detail';
+
+    const data = await axios
+      .get(url, {
+        params: {
+          houseId: '25',
+        },
+      })
+      .then(function (result) {
+        if (result.isError) {
+          Alert.alert('검색 결과가 없습니다.');
+          return;
+        }
+        return result.data.data;
+      })
+      .catch(function (error) {
+        console.log(error);
+      });
+
+    return data;
+  };
+
+  // 페이지 이동
+  useEffect(() => {
+    scrollViewRef.current?.scrollTo({
+      x: currentPageIndex * width,
+      animated: false,
+    });
+  }, [currentPageIndex]);
+
+  // 마커 컴포넌트
+  const MarkerComponent = React.memo(
+    ({item, onSelect}) => {
+      const SIZE =
+        item?.COMPLEX_NM1.length < 3
+          ? 80
+          : item?.COMPLEX_NM1.length * getFontSize(10) + 30;
+
+      return (
+        <Marker
+          key={item.COMPLEX_PK}
+          coordinate={{
+            latitude: item?.latitude ? Number(item?.latitude) : 0,
+            longitude: item?.longitude ? Number(item?.longitude) : 0,
+          }}
+          anchor={{x: 0, y: 1}}
+          minWidth={100}
+          width={SIZE}
+          height={80}
+          onClick={onSelect}>
+          <DropShadow
+            style={{
+              shadowColor: '#2F87FF',
+              shadowOffset: {
+                width: 0,
+                height: 0,
+              },
+              shadowOpacity: 0.5,
+              shadowRadius: 4,
+              overflow: 'visible',
+            }}>
+            <View style={{...styles.marker, width: SIZE}}>
+              <Text style={styles.markerTitle}>{item.COMPLEX_NM1}</Text>
+              <Text style={styles.markerSubTitle}>{item.UNIT_CNT}세대</Text>
+              <View style={styles.markerTriangle} />
+            </View>
+          </DropShadow>
+        </Marker>
+      );
+    },
+    [listData],
+  );
 
   return (
     <ActionSheet
@@ -296,6 +702,7 @@ const MapViewListSheet = props => {
       CustomHeaderComponent={
         <ModalHeader>
           <Pressable
+            hitSlop={20}
             onPress={() => {
               actionSheetRef.current?.hide();
             }}>
@@ -305,231 +712,171 @@ const MapViewListSheet = props => {
       }
       overlayColor="#111"
       defaultOverlayOpacity={0.7}
-      gestureEnabled={true}
+      gestureEnabled={false}
       statusBarTranslucent
       containerStyle={{
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        height: currentPageIndex === 0 ? 850 : 480,
+        height: currentPageIndex === 0 ? 850 : 500,
         width: width - 40,
+        overflow: 'hidden',
       }}>
-      {currentPageIndex === 0 && (
+      <ScrollView
+        ref={scrollViewRef}
+        pagingEnabled={true}
+        horizontal={true}
+        showsHorizontalScrollIndicator={false}
+        scrollEnabled={false}
+        scrollEventThrottle={16}
+        onScroll={e => {
+          const contentOffsetX = e.nativeEvent.contentOffset.x;
+          const currentIndex = Math.round(contentOffsetX / width);
+          setCurrentPageIndex(currentIndex);
+        }}
+        style={{
+          width: width - 40,
+        }}
+        contentContainerStyle={{
+          height: currentPageIndex === 0 ? 850 : 500,
+        }}>
+        // 아파트 단지 선택 전
         <SheetContainer width={width}>
           <FlatList
-            data={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+            data={listData}
             ref={scrollViewRef}
             style={{
               zIndex: 1,
             }}
-            id="FlatList-1"
             {...scrollHandlers}
             scrollEnabled
-            //   onScroll={e => {
-            //     if (e.nativeEvent.contentOffset.y > 0) {
-            //       setHideHeader(true);
-            //     } else {
-            //       setHideHeader(false);
-            //     }
-            //   }}
             nestedScrollEnabled={true}
             showsVerticalScrollIndicator={false}
-            //   stickyHeaderIndices={[0]}
             ListHeaderComponent={
-              <>
-                {!hideHeader && (
-                  <ModalInputSection>
-                    <ModalTitle>
-                      취득하실 아파트 단지를 선택해주세요.
-                    </ModalTitle>
+              <View
+                style={{
+                  zIndex: 1,
+                }}>
+                <ModalInputSection>
+                  <ModalTitle>취득하실 아파트 단지를 선택해주세요.</ModalTitle>
 
-                    <ModalAddressInputContainer>
-                      <ModalAddressInput placeholder="'주택명 혹은 지역명을 입력해주세요'" />
-                      <ModalInputButton>
-                        <SerchIcon />
-                      </ModalInputButton>
-                    </ModalAddressInputContainer>
-
+                  <ModalAddressInputContainer>
+                    <ModalAddressInput
+                      placeholder="'아파트명 혹은 지역명을 입력해주세요'"
+                      value={searchText}
+                      onChangeText={text => {
+                        setSearchText(text.trim());
+                      }}
+                      onSubmitEditing={() => {
+                        if (searchText) {
+                          getAddress();
+                        }
+                      }}
+                    />
+                    <ModalInputButton
+                      onPress={() => {
+                        if (searchText) {
+                          getAddress();
+                        }
+                      }}>
+                      <SerchIcon />
+                    </ModalInputButton>
+                  </ModalAddressInputContainer>
+                  {!myPosition.latitude || !myPosition.longitude ? (
+                    <View
+                      style={{
+                        width: width - 40,
+                        height: 350,
+                        zIndex: 0,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                      <Text
+                        style={{
+                          fontFamily: 'Pretendard-Regular',
+                          fontSize: getFontSize(16),
+                          color: '#1B1C1F',
+                          lineHeight: 24,
+                        }}>
+                        위치 정보를 가져오는 중입니다.
+                      </Text>
+                    </View>
+                  ) : (
                     <NaverMapView
-                      style={{flex: 1, width: width - 40, height: 350}}
-                      showsMyLocationButton={true}
-                      center={{...P0, zoom: 16}}
+                      ref={mapRef}
+                      style={{
+                        flex: 1,
+                        width: width - 40,
+                        height: 350,
+                        zIndex: 0,
+                      }}
+                      showsMyLocationButton={false}
+                      center={{
+                        latitude: Number(myPosition.latitude),
+                        longitude: Number(myPosition.longitude),
+                        zoom,
+                      }}
+                      zoomControl={false}
                       isHideCollidedSymbols
                       isForceShowIcon
                       isHideCollidedCaptions
-                      // onTouch={e =>
-                      //   console.warn('onTouch', JSON.stringify(e.nativeEvent))
-                      // }
-                      // onCameraChange={e =>
-                      //   console.warn('onCameraChange', JSON.stringify(e))
-                      // }
-                      // onMapClick={e =>
-                      //   console.warn('onMapClick', JSON.stringify(e))
-                      // }
-                    >
-                      <Marker
-                        coordinate={P0}
-                        width={100}
-                        height={80}
-                        onCalloutPress={() => console.log('Callout pressed!')}>
-                        <View>
-                          <MapMarkerShadow>
-                            <View
-                              style={{
-                                width: 'auto',
-                                height: 45,
-                                backgroundColor: '#2F87FF',
-                                paddingHorizontal: 10,
-                                margin: 10,
-                                justifyContent: 'center',
-                              }}>
-                              <Text
-                                style={{
-                                  fontFamily: 'Pretendard-Bold',
-                                  fontSize: getFontSize(10),
-                                  color: '#fff',
-                                }}>
-                                동하라 일락
-                              </Text>
-                              <Text
-                                style={{
-                                  fontFamily: 'Pretendard-Bold',
-                                  fontSize: getFontSize(8),
-                                  color: '#fff',
-                                }}>
-                                110세대
-                              </Text>
-                              <View
-                                style={{
-                                  position: 'absolute',
-                                  left: 0, // 삼각형 꼬리의 위치를 조절
-                                  bottom: -10,
-                                  width: 0,
-                                  height: 0,
-                                  borderTopWidth: 10,
-                                  borderTopColor: 'transparent',
-                                  borderLeftWidth: 10,
-                                  borderLeftColor: '#2F87FF', // 내 메시지와 상대방 메시지의 배경색에 따라 설정
-                                  borderBottomWidth: 10,
-                                  borderBottomColor: 'transparent',
-                                }}
-                              />
-                            </View>
-                          </MapMarkerShadow>
-                        </View>
-                      </Marker>
+                      useTextureView={true}
+                      onCameraChange={e => {
+                        if (e.zoom < 13) {
+                          setListData([]);
+                          return;
+                        }
 
-                      <Marker
-                        coordinate={P1}
-                        width={100}
-                        height={80}
-                        onClick={() => console.warn('onClick! p1')}>
-                        <View>
-                          <MapMarkerShadow>
-                            <View
-                              style={{
-                                width: 'auto',
-                                height: 45,
-                                backgroundColor: '#2F87FF',
-                                paddingHorizontal: 10,
-                                margin: 10,
-                                justifyContent: 'center',
-                              }}>
-                              <Text
-                                style={{
-                                  fontFamily: 'Pretendard-Bold',
-                                  fontSize: getFontSize(10),
-                                  color: '#fff',
-                                }}>
-                                동하라 일락
-                              </Text>
-                              <Text
-                                style={{
-                                  fontFamily: 'Pretendard-Bold',
-                                  fontSize: getFontSize(8),
-                                  color: '#fff',
-                                }}>
-                                110세대
-                              </Text>
-                              <View
-                                style={{
-                                  position: 'absolute',
-                                  left: 0, // 삼각형 꼬리의 위치를 조절
-                                  bottom: -10,
-                                  width: 0,
-                                  height: 0,
-                                  borderTopWidth: 10,
-                                  borderTopColor: 'transparent',
-                                  borderLeftWidth: 10,
-                                  borderLeftColor: '#2F87FF', // 내 메시지와 상대방 메시지의 배경색에 따라 설정
-                                  borderBottomWidth: 10,
-                                  borderBottomColor: 'transparent',
-                                }}
-                              />
-                            </View>
-                          </MapMarkerShadow>
-                        </View>
-                      </Marker>
-                      <Marker
-                        coordinate={P2}
-                        width={100}
-                        height={80}
-                        onClick={() => console.warn('onClick! p2')}>
-                        <View>
-                          <MapMarkerShadow>
-                            <View
-                              style={{
-                                width: 'auto',
-                                height: 45,
-                                backgroundColor: '#2F87FF',
-                                paddingHorizontal: 10,
-                                margin: 10,
-                                justifyContent: 'center',
-                              }}>
-                              <Text
-                                style={{
-                                  fontFamily: 'Pretendard-Bold',
-                                  fontSize: getFontSize(10),
-                                  color: '#fff',
-                                }}>
-                                동하라 일락
-                              </Text>
-                              <Text
-                                style={{
-                                  fontFamily: 'Pretendard-Bold',
-                                  fontSize: getFontSize(8),
-                                  color: '#fff',
-                                }}>
-                                110세대
-                              </Text>
-                              <View
-                                style={{
-                                  position: 'absolute',
-                                  left: 0,
-                                  bottom: -10,
-                                  width: 0,
-                                  height: 0,
-                                  borderTopWidth: 10,
-                                  borderTopColor: 'transparent',
-                                  borderLeftWidth: 10,
-                                  borderLeftColor: '#2F87FF',
-                                  borderBottomWidth: 10,
-                                  borderBottomColor: 'transparent',
-                                }}
-                              />
-                            </View>
-                          </MapMarkerShadow>
-                        </View>
-                      </Marker>
+                        getCurrentDistrict(e.longitude, e.latitude);
+                      }}>
+                      {listData.map((item, index) => {
+                        return (
+                          <MarkerComponent
+                            key={index}
+                            item={item}
+                            onSelect={() => {
+                              getDongInfo(item.COMPLEX_PK);
+                              setSelectedItem(item);
+                              setCurrentPageIndex(1);
+                            }}
+                          />
+                        );
+                      })}
                     </NaverMapView>
-                  </ModalInputSection>
-                )}
+                  )}
+                  <DropShadow style={styles.shadow}>
+                    <MyLocationButton
+                      onPress={() => {
+                        Geolocation.getCurrentPosition(
+                          info => {
+                            setMyPosition({
+                              latitude: 0,
+                              longitude: 0,
+                            });
+                            setMyPosition({
+                              latitude: Number(info.coords.latitude),
+                              longitude: Number(info.coords.longitude),
+                            });
+                          },
+                          console.error,
+                          {
+                            enableHighAccuracy: false,
+                            timeout: 20000,
+                            // distanceFilter: 50
+                          },
+                        );
+                      }}>
+                      <LocationIcon />
+                    </MyLocationButton>
+                  </DropShadow>
+                </ModalInputSection>
+
                 <MapSearchResultHeader>
                   <MapSearchResultHeaderTitle>
                     검색 결과
                   </MapSearchResultHeaderTitle>
                 </MapSearchResultHeader>
-              </>
+              </View>
             }
             renderItem={({item, index}) => (
               <MapSearchResultItem>
@@ -538,8 +885,7 @@ const MapViewListSheet = props => {
                     width: '72%',
                   }}>
                   <MapSearchResultItemTitle>
-                    경기도 안양시 동안구 경수대로884번길 12 (신우희가로베스트
-                    아파트)
+                    {item.COMPLEX_NM1}
                   </MapSearchResultItemTitle>
                   <View
                     style={{
@@ -552,13 +898,14 @@ const MapViewListSheet = props => {
                       <AddressNumberText>지번</AddressNumberText>
                     </AddressNumberBadge>
                     <MapSearchResultItemAddress>
-                      서울특별시 강남구 도곡동 123-456 도곡동 123-456
+                      {item?.ADRES}
                     </MapSearchResultItemAddress>
                   </View>
                 </View>
                 <MepSearchResultButton
                   onPress={() => {
-                    console.log('선택');
+                    getDongInfo(item.COMPLEX_PK);
+                    setSelectedItem(item);
                     setCurrentPageIndex(1);
                   }}>
                   <MapSearchResultButtonText>선택</MapSearchResultButtonText>
@@ -568,136 +915,215 @@ const MapViewListSheet = props => {
             keyExtractor={(item, index) => index.toString()}
           />
         </SheetContainer>
-      )}
-
-      {currentPageIndex === 1 && (
-        <SheetContainer>
+        // 아파트 단지 선택 시
+        <SheetContainer width={width}>
           <ModalTitle
             style={{
-              marginTop: 10,
               marginBottom: 20,
             }}>
             취득하실 아파트 동과 호를 선택해주세요.
           </ModalTitle>
           <ApartmentInfoGroup>
             <ApartmentInfoTitle>
-              평촌 래미안 푸르지오{'\n'}104동 1602호
+              {selectedItem?.COMPLEX_NM1}{' '}
+              {selectedDong ? selectedDong : dongList[0]}동{' '}
+              {selectedHo ? selectedHo : hoList[0]}호
             </ApartmentInfoTitle>
           </ApartmentInfoGroup>
           <SelectGroup>
             <View style={{width: '48%'}}>
               <SelectLabel>동 선택</SelectLabel>
               <PickerContainer>
-                <Picker
-                  textSize={getFontSize(18)}
-                  selectTextColor="#1B1C1F"
-                  isShowSelectBackground={false}
-                  isShowSelectLine={false}
-                  style={{
-                    backgroundColor: '#F5F7FA',
-                    width: 120,
-                    height: 160,
-                    borderRadius: 10,
-                  }}
-                  selectedValue="104"
-                  pickerData={['101', '102', '103', '104', '105', '106', '107']}
-                  onValueChange={value => {
-                    console.log(value);
-                  }}
-                />
+                {dongList[0] && (
+                  <WheelPicker
+                    selectedIndex={
+                      selectedDong ? dongList.indexOf(selectedDong) : 0
+                    }
+                    containerStyle={{
+                      width: 120,
+                      height: 140,
+                      borderRadius: 10,
+                    }}
+                    itemTextStyle={{
+                      fontFamily: 'Pretendard-Regular',
+                      fontSize: getFontSize(18),
+                      color: '#1B1C1F',
+                    }}
+                    selectedIndicatorStyle={{
+                      backgroundColor: 'transparent',
+                    }}
+                    itemHeight={40}
+                    options={dongList}
+                    onChange={index => {
+                      setSelectedDong(dongList[index]);
+                      setSelectedHo(hoList[0]);
+                    }}
+                  />
+                )}
               </PickerContainer>
             </View>
             <View style={{width: '48%'}}>
               <SelectLabel>호 선택</SelectLabel>
+
               <PickerContainer>
-                <Picker
-                  textSize={getFontSize(18)}
-                  selectTextColor="#1B1C1F"
-                  isShowSelectBackground={false}
-                  isShowSelectLine={false}
-                  style={{
-                    backgroundColor: '#F5F7FA',
-                    width: 120,
-                    height: 160,
-                    borderRadius: 10,
-                  }}
-                  selectedValue="1602"
-                  pickerData={[
-                    '1600',
-                    '1601',
-                    '1602',
-                    '1603',
-                    '1604',
-                    '1605',
-                    '1606',
-                  ]}
-                  onValueChange={value => {
-                    console.log(value);
-                  }}
-                />
+                {hoList[0] && hoList.length > 0 && (
+                  <WheelPicker
+                    selectedIndex={selectedHo ? hoList.indexOf(selectedHo) : 0}
+                    containerStyle={{
+                      width: 120,
+                      height: 180,
+                      borderRadius: 10,
+                    }}
+                    itemTextStyle={{
+                      fontFamily: 'Pretendard-Regular',
+                      fontSize: getFontSize(18),
+                      color: '#1B1C1F',
+                    }}
+                    selectedIndicatorStyle={{
+                      backgroundColor: 'transparent',
+                    }}
+                    itemHeight={40}
+                    options={hoList}
+                    onChange={index => {
+                      setSelectedHo(hoList[index]);
+                    }}
+                  />
+                )}
               </PickerContainer>
             </View>
           </SelectGroup>
           <ButtonSection>
-            <ButtonShadow
+            <Button
+              onPress={() => {
+                setMyPosition({
+                  latitude: Number(myPosition?.latitude),
+                  longitude: Number(myPosition?.longitude),
+                });
+                setCurrentPageIndex(0);
+              }}
               style={{
-                shadowColor: '#fff',
+                width: '48%',
+                backgroundColor: '#fff',
+                borderColor: '#E8EAED',
+              }}>
+              <ButtonText
+                style={{
+                  color: '#717274',
+                }}>
+                이전으로
+              </ButtonText>
+            </Button>
+
+            <DropShadow
+              style={{
+                width: '48%',
+                shadowColor: '#000',
+                shadowOffset: {
+                  width: 0,
+                  height: 6,
+                },
+                shadowOpacity: 0.15,
+                shadowRadius: 4,
               }}>
               <Button
-                onPress={() => {
-                  setCurrentPageIndex(0);
-                }}
-                style={{
-                  backgroundColor: '#fff',
-                  borderColor: '#E8EAED',
-                }}>
-                <ButtonText
-                  style={{
-                    color: '#717274',
-                  }}>
-                  이전으로
-                </ButtonText>
-              </Button>
-            </ButtonShadow>
-            <ButtonShadow>
-              <Button
-                onPress={() => {
+                onPress={async () => {
                   actionSheetRef.current?.hide();
-                  const chat = {
-                    id: 'apartmentAddress',
-                    type: 'my',
-                    message: '신우희가로베스트',
-                    questionId: 'apartment',
-                  };
-                  const chat1 = {
-                    id: 'apartmentAddressSystem',
-                    type: 'system',
-                    message: '취득하실 아파트 동과 호를 선택해주세요.',
-                    questionId: 'apartment',
-                  };
-                  const chat2 = {
-                    id: 'apartmentAddressMy',
-                    type: 'my',
-                    message: ' 118동 1403호',
-                    questionId: 'apartment',
-                  };
-                  const chat3 = {
-                    id: 'apartmentAddressInfoSystem',
-                    type: 'system',
-                    message: '취득하실 아파트 정보를 불러왔어요.',
-                    questionId: 'apartment',
-                  };
-                  const chatList = [chat, chat1, chat2, chat3];
-                  newMessageTrigger(chatList);
+
+                  try {
+                    const chat = {
+                      id: 'apartmentAddress',
+                      type: 'my',
+                      message: selectedItem?.COMPLEX_NM1,
+                      questionId: 'apartment',
+                      progress: 3,
+                    };
+                    const chat1 = {
+                      id: 'apartmentAddressSystem',
+                      type: 'system',
+                      message: '취득하실 아파트 동과 호를 선택해주세요.',
+                      questionId: 'apartment',
+                      progress: 3,
+                    };
+                    const chat2 = {
+                      id: 'apartmentAddressMy',
+                      type: 'my',
+                      progress: 3,
+                      message:
+                        (selectedDong ? selectedDong : dongList[0]) +
+                        '동 ' +
+                        (selectedHo ? selectedHo : hoList[0]) +
+                        '호',
+                      questionId: 'apartment',
+                    };
+
+                    const data = await getHouseDetailInfo();
+                    dispatch(setHouseInfo({...houseInfo, ...data}));
+
+                    const chat3 = {
+                      id: 'apartmentAddressInfoSystem',
+                      type: 'system',
+                      message: '취득하실 아파트 정보를 불러왔어요.',
+                      questionId: 'apartment',
+                      progress: 4,
+                    };
+
+                    const chatList = [chat, chat1, chat2, chat3];
+                    dispatch(setChatDataList([...chatDataList, ...chatList]));
+                  } catch (error) {
+                    console.error('Error in onPress handler:', error);
+                  }
                 }}>
                 <ButtonText>다음으로</ButtonText>
               </Button>
-            </ButtonShadow>
+            </DropShadow>
           </ButtonSection>
         </SheetContainer>
-      )}
+      </ScrollView>
     </ActionSheet>
   );
 };
+
+const styles = StyleSheet.create({
+  marker: {
+    minWidth: 80,
+    height: 45,
+    backgroundColor: '#2F87FF',
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+  },
+  markerTitle: {
+    width: '100%',
+    fontFamily: 'Pretendard-Bold',
+    fontSize: getFontSize(10),
+    color: '#fff',
+  },
+  markerSubTitle: {
+    fontFamily: 'Pretendard-Regular',
+    fontSize: getFontSize(8),
+    color: '#fff',
+  },
+  markerTriangle: {
+    position: 'absolute',
+    left: 0,
+    bottom: -10,
+    width: 0,
+    height: 0,
+    borderTopWidth: 10,
+    borderTopColor: 'transparent',
+    borderLeftWidth: 10,
+    borderLeftColor: '#2F87FF',
+    borderBottomWidth: 10,
+    borderBottomColor: 'transparent',
+  },
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+});
 
 export default MapViewListSheet;

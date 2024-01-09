@@ -1,5 +1,7 @@
-import {View, Text, TouchableOpacity, useWindowDimensions} from 'react-native';
-import React, {useEffect, useState, useLayoutEffect} from 'react';
+// 양도소득세 홈페이지
+
+import {TouchableOpacity, useWindowDimensions} from 'react-native';
+import React, {useLayoutEffect, useState} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
@@ -93,6 +95,7 @@ const IconView = styled.View`
   right: 25px;
   border: 1px solid #e8eaed;
 `;
+
 const ChatSection = styled.View`
   flex: 1;
 `;

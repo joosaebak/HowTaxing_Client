@@ -1,13 +1,12 @@
+// 가족 보유 주택 안내 페이지
+
 import {
   View,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
-  TextInput,
-  Pressable,
   ScrollView,
 } from 'react-native';
-import React, {useEffect, useState, useLayoutEffect, useRef} from 'react';
+import React, {useState, useLayoutEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
@@ -218,6 +217,7 @@ const OwnedFamilyHouse = () => {
         </TouchableOpacity>
       ),
       title: '가족 보유 주택',
+      headerTitleAlign: 'center',
       headerShadowVisible: false,
       contentStyle: {
         borderTopWidth: 0,

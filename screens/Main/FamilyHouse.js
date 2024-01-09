@@ -1,5 +1,7 @@
-import {View, Text, TouchableOpacity, useWindowDimensions} from 'react-native';
-import React, {useEffect, useState, useLayoutEffect} from 'react';
+// 가족 주택 안내 화면
+
+import {TouchableOpacity, useWindowDimensions} from 'react-native';
+import React, {useLayoutEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
@@ -67,9 +69,11 @@ const ButtonText = styled.Text`
   line-height: 20px;
 `;
 
-const FamilyHouse = () => {
+const FamilyHouse = props => {
   const navigation = useNavigation();
   const {width, height} = useWindowDimensions();
+
+  console.log(props.route.params?.prevChat);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -83,6 +87,7 @@ const FamilyHouse = () => {
           <BackIcon />
         </TouchableOpacity>
       ),
+      headerTitleAlign: 'center',
       title: '가족 주택이란',
       headerShadowVisible: false,
       contentStyle: {
@@ -125,7 +130,10 @@ const FamilyHouse = () => {
         <Button
           width={width}
           onPress={() => {
-            navigation.push('RegisterFamilyHouse');
+            navigation.push('RegisterFamilyHouse', {
+              prevChat: props.route.params?.prevChat,
+              prevSheet: props.route.params?.prevSheet,
+            });
           }}>
           <ButtonText>확인하기</ButtonText>
         </Button>

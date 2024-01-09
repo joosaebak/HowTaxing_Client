@@ -1,10 +1,6 @@
-import {
-  View,
-  Text,
-  useWindowDimensions,
-  StatusBar,
-  PixelRatio,
-} from 'react-native';
+// 홈 페이지
+
+import {useWindowDimensions, StatusBar} from 'react-native';
 import React, {useLayoutEffect, useEffect} from 'react';
 import styled from 'styled-components';
 import DropShadow from 'react-native-drop-shadow';
@@ -12,12 +8,15 @@ import {useNavigation} from '@react-navigation/native';
 import HomeIcon from '../../assets/images/home_home.svg';
 import SignTagIcon from '../../assets/images/home_signtag.svg';
 import getFontSize from '../../utils/getFontSize';
-import {registerSheet, SheetManager} from 'react-native-actions-sheet';
-import MapViewListSheet from '../../components/bottomSheets/MapViewListSheet';
-import AcquisitionSheet from '../../components/bottomSheets/AcquisitionSheet';
-import CertSheet from '../../components/bottomSheets/CertSheet';
-import MapViewListSheet2 from '../../components/bottomSheets/MapViewListSheet2';
-import JointSheet from '../../components/bottomSheets/JointSheet';
+import {SheetManager} from 'react-native-actions-sheet';
+import ChanelTalkIcon from '../../assets/icons/chaneltalk.svg';
+import {ChannelIO} from 'react-native-channel-plugin';
+import NetInfo from '@react-native-community/netinfo';
+import {useDispatch} from 'react-redux';
+import {setChatDataList} from '../../redux/chatDataListSlice';
+import {setHouseInfo} from '../../redux/houseInfoSlice';
+import {setOwnHouseList} from '../../redux/ownHouseListSlice';
+import {setCert} from '../../redux/certSlice';
 
 const Container = styled.View`
   flex: 1;
@@ -115,6 +114,23 @@ const IconView = styled.View`
   border: 1px solid #e8eaed;
 `;
 
+const FloatContainer = styled.View`
+  position: absolute;
+  bottom: 25px;
+  right: 25px;
+`;
+
+const FloatButton = styled.TouchableOpacity.attrs(props => ({
+  activeOpacity: 0.8,
+}))`
+  width: 55px;
+  height: 55px;
+  border-radius: 30px;
+  background-color: #2f87ff;
+  align-items: center;
+  justify-content: center;
+`;
+
 const ShadowContainer = styled(DropShadow)`
   shadow-color: #ececef;
   shadow-offset: 0px 8px;
@@ -124,6 +140,8 @@ const ShadowContainer = styled(DropShadow)`
 
 const Home = () => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
+
   const {width, height} = useWindowDimensions();
 
   useLayoutEffect(() => {
@@ -133,11 +151,36 @@ const Home = () => {
   }, [navigation]);
 
   useEffect(() => {
-    registerSheet('mapViewList', MapViewListSheet);
-    registerSheet('mapViewList2', MapViewListSheet2);
-    registerSheet('acquisition', AcquisitionSheet);
-    registerSheet('cert', CertSheet);
-    registerSheet('joint', JointSheet);
+    // 채널톡 초기화
+    const settings = {
+      pluginKey: 'fbfbfeaa-8f4c-41ef-af7a-7521ae67e9f6',
+    };
+
+    ChannelIO.boot(settings).then(result => {
+      console.log('ChannelIO.boot', result);
+    });
+
+    // 기본 채널톡 버튼 숨기기
+    ChannelIO.hideChannelButton();
+
+    return () => {
+      ChannelIO.shutdown();
+    };
+  }, []);
+
+  useEffect(() => {
+    // 네트워크 연결 확인
+    NetInfo.fetch().then(state => {
+      if (!state?.isConnected) {
+        SheetManager.show('info', {
+          payload: {
+            type: 'info',
+            message:
+              '서버와의 연결이 원활하지 않아요.\n잠시 후 다시 시도해주세요.',
+          },
+        });
+      }
+    });
   }, []);
 
   const AC_HASHTAG_LIST = [
@@ -156,11 +199,26 @@ const Home = () => {
     '장기보유특별공제',
   ];
 
+  const stateInit = () => {
+    dispatch(setChatDataList([]));
+    dispatch(setHouseInfo(null));
+    dispatch(setOwnHouseList([]));
+    dispatch(
+      setCert({
+        agreeCert: false,
+        agreePrivacy: false,
+        agreeThird: false,
+      }),
+    );
+  };
+
   const goAcquisigion = () => {
+    stateInit();
     navigation.push('Acquisition');
   };
 
   const goGainsTax = () => {
+    stateInit();
     navigation.push('GainsTax');
   };
 
@@ -205,6 +263,26 @@ const Home = () => {
           </IconView>
         </Card>
       </ShadowContainer>
+      // 채널톡 버튼
+      <FloatContainer>
+        <DropShadow
+          style={{
+            shadowColor: '#2F87FF',
+            shadowOffset: {
+              width: 0,
+              height: 4,
+            },
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+          }}>
+          <FloatButton
+            onPress={() => {
+              ChannelIO.showMessenger();
+            }}>
+            <ChanelTalkIcon />
+          </FloatButton>
+        </DropShadow>
+      </FloatContainer>
     </Container>
   );
 };

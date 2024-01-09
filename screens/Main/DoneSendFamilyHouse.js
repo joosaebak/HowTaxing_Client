@@ -1,20 +1,11 @@
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  TextInput,
-  Pressable,
-  Image,
-} from 'react-native';
-import React, {useEffect, useState, useLayoutEffect, useRef} from 'react';
+// 가족 주택 전달 완료
+
+import {TouchableOpacity, useWindowDimensions} from 'react-native';
+import React, {useLayoutEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
-import FamilyIcon from '../../assets/images/family_users.svg';
 import DropShadow from 'react-native-drop-shadow';
-import {KeyboardAwareScrollView} from 'react-native-keyboard-aware-scroll-view';
-import ChevronIcon from '../../assets/icons/select_box_arrow_ico.svg';
 import AutoHeightImage from 'react-native-auto-height-image';
 import dayjs from 'dayjs';
 
@@ -72,13 +63,9 @@ const ButtonText = styled.Text`
   line-height: 20px;
 `;
 
-const DoneSendFamilyHouse = () => {
+const DoneSendFamilyHouse = props => {
   const navigation = useNavigation();
   const {width, height} = useWindowDimensions();
-  const nameInputRef = useRef(null);
-  const phoneInputRef = useRef(null);
-  const relationInputRef = useRef(null);
-  const [selectBoxOpen, setSelectBoxOpen] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -92,6 +79,7 @@ const DoneSendFamilyHouse = () => {
           <BackIcon />
         </TouchableOpacity>
       ),
+      headerTitleAlign: 'center',
       title: '가족 주택 전달 완료',
       headerShadowVisible: false,
       contentStyle: {

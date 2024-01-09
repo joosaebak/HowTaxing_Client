@@ -1,5 +1,5 @@
 import {View, Text, FlatList, TouchableOpacity, Pressable} from 'react-native';
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import styled from 'styled-components';
 import getFontSize from '../utils/getFontSize';
 import dayjs from 'dayjs';
@@ -8,8 +8,7 @@ import ArrowIcon from '../assets/icons/previous_arrow_ico.svg';
 const CalendarSection = styled.View`
   width: 100%;
   padding: 0 10px;
-  border-bottom-width: 1px;
-  border-bottom-color: #f2f3f5;
+
   padding-bottom: 20px;
 `;
 
@@ -30,12 +29,21 @@ const ModalSubtitle = styled.Text`
   margin: 20px 0;
 `;
 
-const Calendar = () => {
+const Calendar = props => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDateItem, setSelectedDateItem] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calendarData, setCalendarData] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(props.selectedDate);
+
+  useEffect(() => {
+    generateDatesInRange();
+  }, [currentDate]);
+
+  useEffect(() => {
+    props.setSelectedDate(selectedDate);
+  }, [selectedDate]);
 
   const CalendarHeader = () => {
+    const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
     return (
       <View
         style={{
@@ -43,15 +51,11 @@ const Calendar = () => {
           justifyContent: 'space-between',
           height: 32,
           paddingHorizontal: 10,
-          marginTop: 30,
+          marginTop: 10,
         }}>
-        <CalendarWeekday>일</CalendarWeekday>
-        <CalendarWeekday>월</CalendarWeekday>
-        <CalendarWeekday>화</CalendarWeekday>
-        <CalendarWeekday>수</CalendarWeekday>
-        <CalendarWeekday>목</CalendarWeekday>
-        <CalendarWeekday>금</CalendarWeekday>
-        <CalendarWeekday>토</CalendarWeekday>
+        {DAYS.map((day, index) => (
+          <CalendarWeekday key={index}>{day}</CalendarWeekday>
+        ))}
       </View>
     );
   };
@@ -77,21 +81,23 @@ const Calendar = () => {
   );
 
   const renderDay = ({item}) => {
-    const isToday = item.toDateString() === new Date().toDateString();
-    const isPast = item < new Date();
+    const isPast = item < props.minDate;
     const isSunday = item.getDay() === 0;
     const isSaturday = item.getDay() === 6;
-    const isSelected = item.toDateString() === selectedDateItem.toDateString();
+    const isSelected = item.toDateString() === selectedDate?.toDateString();
 
     return (
       <Pressable
+        disabled={props.minDate ? isPast : false}
         onPress={() => {
-          setSelectedDateItem(item);
+          setSelectedDate(item);
         }}
         style={{
           flex: 1,
           backgroundColor: '#fff',
           height: 42,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}>
         <View
           style={{
@@ -137,10 +143,9 @@ const Calendar = () => {
     ) {
       dates.push(new Date(date));
     }
-    return dates;
-  };
 
-  const data = generateDatesInRange();
+    setCalendarData(dates);
+  };
 
   return (
     <View
@@ -175,11 +180,11 @@ const Calendar = () => {
               right: 20,
             }}
             onPress={() => {
-              setSelectedDate(dayjs(selectedDate).subtract(-1, 'M').toDate());
+              setCurrentDate(dayjs(currentDate).subtract(1, 'M').toDate());
             }}>
             <ArrowIcon />
           </TouchableOpacity>
-          <ModalSubtitle>{dayjs(selectedDate).format('YYYY.MM')}</ModalSubtitle>
+          <ModalSubtitle>{dayjs(currentDate).format('YYYY.MM')}</ModalSubtitle>
           <TouchableOpacity
             activeOpacity={0.8}
             hitSlop={{
@@ -189,7 +194,7 @@ const Calendar = () => {
               right: 20,
             }}
             onPress={() => {
-              setSelectedDate(dayjs(selectedDate).subtract(1, 'M').toDate());
+              setCurrentDate(dayjs(currentDate).add(1, 'M').toDate());
             }}>
             <ArrowIcon
               style={{
@@ -202,8 +207,9 @@ const Calendar = () => {
       <CalendarHeader />
       <CalendarSection>
         <FlatList
+          key={currentDate.getMonth()}
           scrollEnabled={false}
-          data={data}
+          data={calendarData}
           numColumns={7}
           keyExtractor={item => item.toISOString()}
           renderItem={renderDay}

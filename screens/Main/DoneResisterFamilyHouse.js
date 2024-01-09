@@ -1,21 +1,13 @@
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  TextInput,
-  Pressable,
-  Image,
-} from 'react-native';
-import React, {useEffect, useState, useLayoutEffect, useRef} from 'react';
+// 가족 주택 등록 요청 완료 페이지
+
+import {Alert, TouchableOpacity, useWindowDimensions} from 'react-native';
+import React, {useLayoutEffect, useEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
-import FamilyIcon from '../../assets/images/family_users.svg';
 import DropShadow from 'react-native-drop-shadow';
-import {KeyboardAwareScrollView} from 'react-native-keyboard-aware-scroll-view';
-import ChevronIcon from '../../assets/icons/select_box_arrow_ico.svg';
 import AutoHeightImage from 'react-native-auto-height-image';
+import {SheetManager} from 'react-native-actions-sheet';
 
 const Container = styled.View`
   flex: 1;
@@ -29,16 +21,6 @@ const IntroSection = styled.View`
   height: 220px;
   width: 100%;
   background-color: #fff;
-`;
-
-const IconView = styled.View`
-  width: 50px;
-  height: 50px;
-  border-radius: 25px;
-  background-color: #fff;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid #e8eaed;
 `;
 
 const Title = styled.Text`
@@ -57,38 +39,6 @@ const SubTitle = styled.Text`
   color: #a3a5a8;
   line-height: 18px;
   margin-top: 20px;
-`;
-
-const InputSection = styled.View`
-  flex: 1;
-  background-color: #f7f8fa;
-  padding: 20px;
-`;
-
-const Paper = styled.View`
-  width: 100%;
-  height: auto;
-  background-color: #fff;
-  border-radius: 5px;
-  margin-bottom: 10px;
-  padding: 20px;
-  border: 1px solid #e8eaed;
-`;
-
-const Label = styled.Text`
-  font-size: 13px;
-  font-family: Pretendard-Medium;
-  color: #1b1c1f;
-  line-height: 16px;
-  margin-bottom: 10px;
-`;
-
-const DescText = styled.Text`
-  font-size: 10px;
-  font-family: Pretendard-Regular;
-  color: #a3a5a8;
-  line-height: 16px;
-  margin-bottom: 15px;
 `;
 
 const Button = styled.TouchableOpacity.attrs(props => ({
@@ -113,24 +63,9 @@ const ButtonText = styled.Text`
   line-height: 20px;
 `;
 
-const InputContainer = styled.View`
-  flex-direction: row;
-  width: 100%;
-  height: 45px;
-  background-color: #f5f7fa;
-  border-radius: 5px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-`;
-
-const DoneResisterFamilyHouse = () => {
+const DoneResisterFamilyHouse = props => {
   const navigation = useNavigation();
   const {width, height} = useWindowDimensions();
-  const nameInputRef = useRef(null);
-  const phoneInputRef = useRef(null);
-  const relationInputRef = useRef(null);
-  const [selectBoxOpen, setSelectBoxOpen] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -144,6 +79,7 @@ const DoneResisterFamilyHouse = () => {
           <BackIcon />
         </TouchableOpacity>
       ),
+      headerTitleAlign: 'center',
       title: '가족 주택 등록 요청 완료',
       headerShadowVisible: false,
       contentStyle: {
@@ -156,6 +92,21 @@ const DoneResisterFamilyHouse = () => {
         letterSpacing: -0.8,
       },
     });
+  }, []);
+
+  useEffect(() => {
+    const unscribe = setTimeout(() => {
+      navigation.navigate(props.route.parmas.prevChat);
+      SheetManager.show(props.route.parmas.prevSheet, {
+        payload: {
+          navigation,
+        },
+      });
+    }, 5000);
+
+    return () => {
+      clearTimeout(unscribe);
+    };
   }, []);
 
   return (
@@ -187,7 +138,7 @@ const DoneResisterFamilyHouse = () => {
           borderColor: '#E8EAED',
         }}
         onPress={() => {
-          navigation.push('DoneResisterFamilyHouse');
+          navigation.goBack();
         }}>
         <ButtonText
           style={{
@@ -209,7 +160,7 @@ const DoneResisterFamilyHouse = () => {
         <Button
           width={width}
           onPress={() => {
-            navigation.push('DoneResisterFamilyHouse');
+            Alert.alert('API 연동 필요');
           }}>
           <ButtonText>다시 요청하기</ButtonText>
         </Button>

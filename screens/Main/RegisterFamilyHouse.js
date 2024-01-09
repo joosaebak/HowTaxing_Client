@@ -1,3 +1,5 @@
+// 가족 주택 등록하기
+
 import {
   View,
   Text,
@@ -5,8 +7,9 @@ import {
   useWindowDimensions,
   TextInput,
   Pressable,
+  ScrollView,
 } from 'react-native';
-import React, {useEffect, useState, useLayoutEffect, useRef} from 'react';
+import React, {useState, useLayoutEffect, useRef, useEffect} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import BackIcon from '../../assets/icons/back_button.svg';
 import styled from 'styled-components';
@@ -118,16 +121,38 @@ const InputContainer = styled.View`
   border-radius: 5px;
   align-items: center;
   justify-content: space-between;
+  padding: 0 10px;
+`;
+
+const SelectListItem = styled.View`
+  flex-direction: row;
+  width: 100%;
+  height: 45px;
+  background-color: #fff;
+  border-radius: 5px;
+  align-items: center;
+  justify-content: space-between;
   padding: 0 20px;
 `;
 
-const RegisterFamilyHouse = () => {
+const RegisterFamilyHouse = props => {
   const navigation = useNavigation();
+  const scrollViewRef = useRef(null);
   const {width, height} = useWindowDimensions();
   const nameInputRef = useRef(null);
-  const phoneInputRef = useRef(null);
-  const relationInputRef = useRef(null);
   const [selectBoxOpen, setSelectBoxOpen] = useState(false);
+  const [selectedRelation, setSelectedRelation] = useState('배우자');
+
+  // 가족 관계 리스트
+  const RELATION_LIST = [
+    '배우자',
+    '부모',
+    '자녀',
+    '형제',
+    '자매',
+    '조부모',
+    '기타',
+  ];
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -141,6 +166,7 @@ const RegisterFamilyHouse = () => {
           <BackIcon />
         </TouchableOpacity>
       ),
+      headerTitleAlign: 'center',
       title: '가족 주택 등록하기',
       headerShadowVisible: false,
       contentStyle: {
@@ -158,6 +184,9 @@ const RegisterFamilyHouse = () => {
   return (
     <Container>
       <KeyboardAwareScrollView
+        ref={scrollViewRef}
+        scrollEnabled={!selectBoxOpen}
+        nestedScrollEnabled={true}
         contentContainerStyle={{
           paddingBottom: 160,
         }}>
@@ -184,6 +213,7 @@ const RegisterFamilyHouse = () => {
               <InputContainer>
                 <TextInput
                   ref={nameInputRef}
+                  placeholderTextColor={'#A3A5A8'}
                   placeholder="성명을 입력해주세요"
                   style={{
                     width: '100%',
@@ -195,6 +225,7 @@ const RegisterFamilyHouse = () => {
                   underlineColorAndroid={'transparent'}
                   keyboardType="default"
                   autoCapitalize="none"
+                  maxLength={20}
                   autoCorrect={false}
                   returnKeyType="next"
                   onSubmitEditing={() => {}}
@@ -209,6 +240,7 @@ const RegisterFamilyHouse = () => {
               <InputContainer>
                 <TextInput
                   ref={nameInputRef}
+                  placeholderTextColor={'#A3A5A8'}
                   placeholder="휴대폰 번호를 입력해주세요"
                   style={{
                     width: '100%',
@@ -218,8 +250,9 @@ const RegisterFamilyHouse = () => {
                     color: '#1B1C1F',
                   }}
                   underlineColorAndroid={'transparent'}
-                  keyboardType="default"
+                  keyboardType="phone-pad"
                   autoCapitalize="none"
+                  maxLength={11}
                   autoCorrect={false}
                   returnKeyType="next"
                   onSubmitEditing={() => {
@@ -236,6 +269,9 @@ const RegisterFamilyHouse = () => {
               <Pressable
                 onPress={() => {
                   setSelectBoxOpen(!selectBoxOpen);
+                  if (!selectBoxOpen) {
+                    scrollViewRef.current.scrollToEnd({animated: true});
+                  }
                 }}>
                 <InputContainer>
                   <Text
@@ -244,8 +280,9 @@ const RegisterFamilyHouse = () => {
                       fontFamily: 'Pretendard-Regular',
                       fontSize: 13,
                       color: '#1B1C1F',
+                      marginLeft: 10,
                     }}>
-                    배우자
+                    {selectedRelation}
                   </Text>
                   <ChevronIcon
                     style={{
@@ -254,11 +291,52 @@ const RegisterFamilyHouse = () => {
                   />
                 </InputContainer>
               </Pressable>
+              {selectBoxOpen && (
+                <DropShadow
+                  style={{
+                    shadowColor: '#000',
+                    shadowOffset: {
+                      width: 0,
+                      height: 4,
+                    },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 4,
+                  }}>
+                  <ScrollView
+                    style={{
+                      height: 200,
+                      backgroundColor: '#fff',
+                      borderRadius: 6,
+                      marginTop: 6,
+                    }}>
+                    {RELATION_LIST.map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        activeOpacity={0.6}
+                        onPress={() => {
+                          setSelectedRelation(item);
+                          setSelectBoxOpen(false);
+                        }}>
+                        <SelectListItem>
+                          <Text
+                            style={{
+                              width: '70%',
+                              fontFamily: 'Pretendard-Regular',
+                              fontSize: 13,
+                              color: '#1B1C1F',
+                            }}>
+                            {item}
+                          </Text>
+                        </SelectListItem>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </DropShadow>
+              )}
             </Paper>
           </InputSection>
         </>
       </KeyboardAwareScrollView>
-
       <DropShadow
         style={{
           shadowColor: 'rgba(0,0,0,0.25)',
@@ -272,7 +350,10 @@ const RegisterFamilyHouse = () => {
         <Button
           width={width}
           onPress={() => {
-            navigation.push('DoneResisterFamilyHouse');
+            navigation.push('DoneResisterFamilyHouse', {
+              prevChat: props.route.params?.prevChat,
+              prevSheet: props.route.params?.prevSheet,
+            });
           }}>
           <ButtonText>요청하기</ButtonText>
         </Button>

@@ -1,3 +1,5 @@
+// 사용자 정보
+
 import {createSlice} from '@reduxjs/toolkit';
 
 const initialState = {

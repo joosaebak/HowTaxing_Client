@@ -1,41 +1,25 @@
+// 공동 소유자가 몇 명인가요? 질문에 대한 답변을 선택하는 bottom sheet
+
 import {
   View,
   Text,
   useWindowDimensions,
-  FlatList,
   TouchableOpacity,
   Pressable,
 } from 'react-native';
-import React, {useRef, useState, useEffect} from 'react';
-import ActionSheet, {
-  ActionSheetRef,
-  SheetManager,
-  useScrollHandlers,
-} from 'react-native-actions-sheet';
+import React, {useRef, useState} from 'react';
+import ActionSheet from 'react-native-actions-sheet';
 import styled from 'styled-components';
 import getFontSize from '../../utils/getFontSize';
 import CloseIcon from '../../assets/icons/close_button.svg';
-import SerchIcon from '../../assets/icons/search_map.svg';
 
-import NaverMapView, {
-  Circle,
-  Marker,
-  Path,
-  Polyline,
-  Polygon,
-  Callout,
-} from 'react-native-nmap';
 import DropShadow from 'react-native-drop-shadow';
-import {Picker, DatePicker} from 'react-native-wheel-pick';
-import dayjs from 'dayjs';
-import InfoIcon from '../../assets/icons/info_tooltip_ico.svg';
-import {TimeDatePicker, Modes} from 'react-native-time-date-picker';
-import {numToKorean} from 'num-to-korean';
-import Calendar from '../Calendar';
-import numberToKorean from '../../utils/numToKorean';
-import CheckOnIcon from '../../assets/icons/check_on.svg';
 import MinusIcon from '../../assets/icons/minus.svg';
 import PlusIcon from '../../assets/icons/plus.svg';
+import {useDispatch, useSelector} from 'react-redux';
+import {setHouseInfo} from '../../redux/houseInfoSlice';
+import {setChatDataList} from '../../redux/chatDataListSlice';
+import {acquisitionTax} from '../../data/chatData';
 
 const SheetContainer = styled.View`
   flex: 1;
@@ -50,116 +34,6 @@ const ModalTitle = styled.Text`
   color: #1b1c1f;
   line-height: 26px;
   text-align: center;
-`;
-
-const ModalLabel = styled.Text`
-  font-size: 15px;
-  font-family: Pretendard-SemiBold;
-  color: #000;
-  line-height: 18px;
-  margin-right: 6px;
-`;
-
-const ModalDescription = styled.Text`
-  font-size: ${getFontSize(15)}px;
-  font-family: Pretendard-Regular;
-  color: #a3a5a8;
-  line-height: 26px;
-  margin-top: 10px;
-  text-align: center;
-`;
-
-const ListItem = styled.View`
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0 20px;
-`;
-
-const CheckCircle = styled.TouchableOpacity.attrs(props => ({
-  activeOpacity: 0.8,
-}))`
-  width: 30px;
-  height: 30px;
-  border-radius: 15px;
-  background-color: #fff;
-  border: 1px solid #cfd1d5;
-  align-items: center;
-  justify-content: center;
-  margin-right: 10px;
-`;
-
-const ListItemTitle = styled.Text`
-  flex: 1;
-  font-size: ${getFontSize(12)}px;
-  font-family: Pretendard-Regular;
-  color: #1b1c1f;
-  line-height: 20px;
-`;
-
-const ListItemButton = styled.TouchableOpacity.attrs(props => ({
-  activeOpacity: 0.8,
-}))``;
-
-const ListItemButtonText = styled.Text`
-  font-size: ${getFontSize(12)}px;
-  font-family: Pretendard-Regular;
-  color: #717274;
-  line-height: 20px;
-  text-decoration-line: underline;
-  text-decoration-color: #717274;
-`;
-
-const CertLogoImage = styled.Image.attrs(props => ({
-  resizeMode: 'contain',
-}))`
-  width: 28px;
-  height: 20px;
-  align-self: center;
-  margin-bottom: 10px;
-`;
-
-const ModalInputContainer = styled.View`
-  width: 100%;
-  height: auto;
-  margin-top: 10px;
-  padding: 0 20px;
-`;
-
-const ModalInput = styled.TextInput.attrs(props => ({
-  placeholderTextColor: '#C1C3C5',
-}))`
-  width: 100%;
-  height: 50px;
-  border-radius: 10px;
-  background-color: #f0f3f8;
-  padding: 0 15px;
-  margin-top: 10px;
-  font-size: 15px;
-  font-family: Pretendard-Regular;
-  color: #1b1c1f;
-  line-height: 20px;
-  text-align: left;
-`;
-
-const ModalSelectButton = styled.TouchableOpacity.attrs(props => ({
-  activeOpacity: 0.6,
-}))`
-  width: 24%;
-  height: 48px;
-  border-radius: 10px;
-  background-color: #fff;
-  align-items: center;
-  justify-content: center;
-  margin-top: 10px;
-  border: 1px solid #e8eaed;
-`;
-
-const ModalSelectButtonText = styled.Text`
-  font-size: 15px;
-  font-family: Pretendard-SemiBold;
-  color: #1b1c1f;
-  line-height: 20px;
 `;
 
 const ModalInputSection = styled.View`
@@ -189,11 +63,11 @@ const ModalButtonText = styled.Text`
 
 const ModalHeader = styled.View`
   width: 100%;
-  height: 36px;
+  height: 50px;
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 10px;
+  padding: 0px 20px;
 `;
 
 const ButtonSection = styled.View`
@@ -206,52 +80,13 @@ const ButtonSection = styled.View`
   padding: 20px;
 `;
 
-const ButtonShadow = styled(DropShadow)`
-  width: 48%;
-  shadow-color: #000;
-  shadow-offset: {
-    width: 0;
-    height: 10;
-  }
-  shadow-opacity: 0.25;
-  shadow-radius: 4;
-`;
-
-const Button = styled.TouchableOpacity.attrs(props => ({
-  activeOpacity: 0.8,
-}))`
-  width: 100%;
-  height: 50px;
-  border-radius: 25px;
-  background-color: #2f87ff;
-  align-items: center;
-  justify-content: center;
-  border-width: 1px;
-  border-color: #2f87ff;
-`;
-
-const ButtonText = styled.Text`
-  font-size: ${getFontSize(16)}px;
-  font-family: Pretendard-Bold;
-  color: #fff;
-  line-height: 20px;
-`;
-
 const JointSheet = props => {
   const actionSheetRef = useRef(null);
-  const scrollViewRef = useRef(null);
+  const dispatch = useDispatch();
   const {width, height} = useWindowDimensions();
-  const [hideHeader, setHideHeader] = useState(false);
-  const P0 = {latitude: 37.564362, longitude: 126.977011};
-  const P1 = {latitude: 37.565051, longitude: 126.978567};
-  const P2 = {latitude: 37.565383, longitude: 126.976292};
-  const scrollHandlers = useScrollHandlers('FlatList-1', actionSheetRef);
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [acAmount, setAcAmount] = useState(550000000);
-  const [agreeCert, setAgreeCert] = useState(false);
-  const [agreePrivacy, setAgreePrivacy] = useState(false);
-  const [agreeKB, setAgreeKB] = useState(false);
+  const [personCount, setPersonCount] = useState(2);
+  const houseInfo = useSelector(state => state.houseInfo.value);
+  const chatDataList = useSelector(state => state.chatDataList.value);
 
   return (
     <ActionSheet
@@ -260,6 +95,7 @@ const JointSheet = props => {
       CustomHeaderComponent={
         <ModalHeader>
           <Pressable
+            hitSlop={20}
             onPress={() => {
               actionSheetRef.current?.hide();
             }}>
@@ -269,13 +105,13 @@ const JointSheet = props => {
       }
       overlayColor="#111"
       defaultOverlayOpacity={0.7}
-      gestureEnabled={true}
+      gestureEnabled={false}
       statusBarTranslucent
       containerStyle={{
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        height: currentPageIndex === 0 ? 280 : 520,
+        height: 280,
         width: width - 40,
       }}>
       <SheetContainer width={width}>
@@ -291,6 +127,11 @@ const JointSheet = props => {
               marginTop: 20,
             }}>
             <TouchableOpacity
+              onPress={() => {
+                if (personCount > 2) {
+                  setPersonCount(personCount - 1);
+                }
+              }}
               style={{
                 width: 60,
                 height: 60,
@@ -310,10 +151,13 @@ const JointSheet = props => {
                 lineHeight: 20,
                 marginHorizontal: 10,
               }}>
-              2명
+              {personCount}명
             </Text>
 
             <TouchableOpacity
+              onPress={() => {
+                setPersonCount(personCount + 1);
+              }}
               style={{
                 width: 60,
                 height: 60,
@@ -343,38 +187,28 @@ const JointSheet = props => {
               alignSelf: 'center',
             }}>
             <ModalButton
-              disabled={!(agreeCert && agreePrivacy && agreeKB)}
               onPress={() => {
+                dispatch(
+                  setHouseInfo({...houseInfo, personCount: personCount}),
+                );
                 actionSheetRef.current?.hide();
                 const chat = {
                   id: 'jointSystem',
                   type: 'system',
                   message: '공동 소유자가 몇 명인가요?',
                   questionId: 'apartment',
+                  progress: 5,
                 };
                 const chat1 = {
                   id: 'joint',
                   type: 'my',
-                  message: '2명',
+                  message: `${personCount}명`,
                   questionId: 'apartment',
                 };
-                const chat2 = {
-                  id: 'anotherApartment',
-                  type: 'system',
-                  message: '취득하실 주택 외 보유 중인 주택이 있나요?',
-                  questionId: 'apartment',
-                  select: [
-                    {
-                      id: 'yes',
-                      name: '네',
-                    },
-                    {
-                      id: 'no',
-                      name: '아니오',
-                    },
-                  ],
-                };
-                props.payload.newMessageTrigger([chat, chat1, chat2]);
+                const chat2 = acquisitionTax.find(el => el.id === 'moreHouse');
+                dispatch(
+                  setChatDataList([...chatDataList, chat, chat1, chat2]),
+                );
               }}
               style={{
                 width: width - 80,
