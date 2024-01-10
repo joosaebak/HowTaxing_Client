@@ -404,35 +404,6 @@ const MapViewListSheet = props => {
 
   // 현재 위치의 동 가져오기
   const getCurrentDistrict = async (longitude, latitude) => {
-    // try {
-    //   const API_KEY = 'U01TX0FVVEgyMDIzMTIxNDE2MDk0NTExNDM1NzY=';
-    //   const url = `https://business.juso.go.kr/addrlink/addrLinkApi.do?confmKey=${API_KEY}&currentPage=0&countPerPage=100&keyword=${encodeURI(
-    //     '경기도 경수대로',
-    //   )}&resultType=json`;
-
-    //   const response = await axios.get(url);
-    //   console.log('response', response.data.results.juso);
-
-    //   if (response.data.results.juso.length === 0) {
-    //     SheetManager.show('info', {
-    //       payload: {
-    //         message: '검색 결과가 없습니다.',
-    //         type: 'error',
-    //       },
-    //     });
-    //   }
-
-    //   const location = await getAPTLocation({
-    //     ADRES: response.data.results.juso[0].roadAddr,
-    //   });
-    //   setMyPosition({
-    //     latitude: Number(location.latitude),
-    //     longitude: Number(location.longitude),
-    //   });
-    // } catch (error) {
-    //   console.error(error);
-    // }
-
     const API_KEY = 'e094e49e35c61a9da896785b6fee020a';
     const config = {
       headers: {
