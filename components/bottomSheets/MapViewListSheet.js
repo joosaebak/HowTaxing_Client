@@ -375,26 +375,13 @@ const MapViewListSheet = props => {
   const getAddress = async () => {
     try {
       const API_KEY = 'U01TX0FVVEgyMDIzMTIxNDE2MDk0NTExNDM1NzY=';
-      const url = `https://business.juso.go.kr/addrlink/addrLinkApiJsonp.do?confmKey=${API_KEY}&currentPage=0&countPerPage=1&keyword=${encodeURI(
+      const url = `https://business.juso.go.kr/addrlink/addrLinkApi.do?confmKey=${API_KEY}&currentPage=0&countPerPage=1&keyword=${encodeURI(
         searchText,
       )}&resultType=json`;
 
       const response = await axios.get(url);
-      const extractedData = response.data.match(/\(.*\)/s)[0];
-      const parsedData = JSON.parse(
-        extractedData.substring(1, extractedData.length - 1),
-      );
 
-      if (parsedData.results.common.errorCode !== '0') {
-        SheetManager.show('info', {
-          payload: {
-            message: parsedData.results.common.errorMessage,
-            type: 'error',
-          },
-        });
-      }
-
-      if (!parsedData.results.juso[0]) {
+      if (response.data.results.juso.length === 0) {
         SheetManager.show('info', {
           payload: {
             message: '검색 결과가 없습니다.',
@@ -404,7 +391,7 @@ const MapViewListSheet = props => {
       }
 
       const location = await getAPTLocation({
-        ADRES: parsedData.results.juso[0].roadAddr,
+        ADRES: response.data.results.juso[0].roadAddr,
       });
       setMyPosition({
         latitude: Number(location.latitude),
@@ -412,14 +399,40 @@ const MapViewListSheet = props => {
       });
     } catch (error) {
       console.error(error);
-      SheetManager.show('info', {
-        payload: {message: error.message, type: 'error'},
-      });
     }
   };
 
   // 현재 위치의 동 가져오기
   const getCurrentDistrict = async (longitude, latitude) => {
+    // try {
+    //   const API_KEY = 'U01TX0FVVEgyMDIzMTIxNDE2MDk0NTExNDM1NzY=';
+    //   const url = `https://business.juso.go.kr/addrlink/addrLinkApi.do?confmKey=${API_KEY}&currentPage=0&countPerPage=100&keyword=${encodeURI(
+    //     '경기도 경수대로',
+    //   )}&resultType=json`;
+
+    //   const response = await axios.get(url);
+    //   console.log('response', response.data.results.juso);
+
+    //   if (response.data.results.juso.length === 0) {
+    //     SheetManager.show('info', {
+    //       payload: {
+    //         message: '검색 결과가 없습니다.',
+    //         type: 'error',
+    //       },
+    //     });
+    //   }
+
+    //   const location = await getAPTLocation({
+    //     ADRES: response.data.results.juso[0].roadAddr,
+    //   });
+    //   setMyPosition({
+    //     latitude: Number(location.latitude),
+    //     longitude: Number(location.longitude),
+    //   });
+    // } catch (error) {
+    //   console.error(error);
+    // }
+
     const API_KEY = 'e094e49e35c61a9da896785b6fee020a';
     const config = {
       headers: {
@@ -470,7 +483,6 @@ const MapViewListSheet = props => {
 
     try {
       const response = await axios.get(url);
-      console.log('response', response.data.data);
       const aptList = response.data.data.filter(el => el.COMPLEX_GB_CD === '1');
 
       const locations = [];
@@ -489,7 +501,6 @@ const MapViewListSheet = props => {
           Math.pow(Number(b.longitude) - Number(longitude), 2);
         return aDistance - bDistance;
       });
-      console.log('locations', locations);
 
       // 검색어가 포함된 아파트가 있으면 맨 위로 이동
       if (searchText !== '') {
@@ -591,10 +602,6 @@ const MapViewListSheet = props => {
           return item.DONG_NM1.replace('동', '');
         });
         setDongList(dongs);
-        const hos = result.data.data.map(item => {
-          const list = generateApartmentNumbers(item.GRND_FLR_CNT, 5);
-          return list;
-        });
 
         setHoList(hos[0]);
       })
@@ -603,21 +610,36 @@ const MapViewListSheet = props => {
       });
   };
 
-  // 아파트 호수 생성
-  const generateApartmentNumbers = (totalFloors, totalLines) => {
-    const apartmentNumbers = [];
+  // 주택 호 정보 가져오기
+  const getHoData = async (address, dongNm) => {
+    const API_KEY = 'devU01TX0FVVEgyMDI0MDEwOTIzMDQ0MjExNDQxOTY=';
 
-    for (let floor = 1; floor <= totalFloors; floor++) {
-      for (let line = 1; line <= totalLines; line++) {
-        // 호수 생성 및 배열에 추가
-        const floorStr = String(floor); // 층을 두 자리 숫자로 변환
-        const lineStr = String(line).padStart(2, '0'); // 라인을 두 자리 숫자로 변환
-        const apartmentNumber = `${floorStr}${lineStr}`;
-        apartmentNumbers.push(apartmentNumber);
-      }
-    }
+    const url = 'https://business.juso.go.kr/addrlink/addrDetailApi.do';
 
-    return apartmentNumbers;
+    await axios
+      .get(url, {
+        params: {
+          confmKey: API_KEY,
+          admCd: address.admCd,
+          rnMgtSn: address.rnMgtSn,
+          udrtYn: address.udrtYn,
+          buldMnnm: address.buldMnnm,
+          buldSlno: address.buldSlno,
+          searchType: 'floorho',
+          dongNm: dongNm,
+          resultType: 'json',
+        },
+      })
+      .then(function (result) {
+        const ilst = result.data.results.juso.map(ho => {
+          return ho.hoNm.replace('호', '');
+        });
+        setHoList(ilst);
+        setSelectedHo(ilst[0]);
+      })
+      .catch(function (error) {
+        console.log(error);
+      });
   };
 
   // 아파트 단지 선택 시 상세 정보 가져오기
@@ -652,7 +674,6 @@ const MapViewListSheet = props => {
     });
   }, [currentPageIndex]);
 
-  // 마커 컴포넌트
   const MarkerComponent = React.memo(
     ({item, onSelect}) => {
       const SIZE =
@@ -740,7 +761,6 @@ const MapViewListSheet = props => {
         contentContainerStyle={{
           height: currentPageIndex === 0 ? 850 : 500,
         }}>
-        // 아파트 단지 선택 전
         <SheetContainer width={width}>
           <FlatList
             data={listData}
@@ -915,7 +935,6 @@ const MapViewListSheet = props => {
             keyExtractor={(item, index) => index.toString()}
           />
         </SheetContainer>
-        // 아파트 단지 선택 시
         <SheetContainer width={width}>
           <ModalTitle
             style={{

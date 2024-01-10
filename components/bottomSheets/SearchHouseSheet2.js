@@ -472,61 +472,33 @@ const SearchHouseSheet2 = props => {
     return apartmentNumbers;
   };
 
-  const getDongInfo = async id => {
-    const API_KEY =
-      'ZWYbv%2BOs9rH3SOjqQZdcBDDXV4k6EasX9%2BswAK7H9yHd5L6U6CNyS2L1p2q0r%2BglE2sXxryzWReJ8fvRaGNgEQ%3D%3D';
-    const config = {
-      headers: {
-        Authorization: `${API_KEY}`,
-      },
-    }; // 헤더 설정
+  // 주택 호 정보 가져오기
+  const getHoData = async (address, dongNm) => {
+    const API_KEY = 'devU01TX0FVVEgyMDI0MDEwOTIzMDQ0MjExNDQxOTY=';
 
-    const url = `https://api.odcloud.kr/api/AptIdInfoSvc/v1/getDongInfo?page=1&perPage=30&cond%5BCOMPLEX_PK%3A%3AEQ%5D=${id}&serviceKey=${API_KEY}`;
-
-    await axios
-      .get(url, config)
-      .then(function (result) {
-        // API호출
-        const dongs = result.data.data.map(item => {
-          return item.DONG_NM1.replace('동', '');
-        });
-        setDongList(dongs);
-        const hos = result.data.data.map(item => {
-          const list = generateApartmentNumbers(item.GRND_FLR_CNT, 5);
-          return list;
-        });
-
-        setHoList(hos[0]);
-      })
-      .catch(function (error) {
-        console.log(error);
-      });
-  };
-
-  const getHouseDetailInfo = async () => {
-    // 취득할 주택 정보 가져오기
-    const url = 'http://13.125.194.154:8080/house/detail';
+    const url = 'https://business.juso.go.kr/addrlink/addrDetailApi.do';
+    console.log('111', address);
 
     await axios
       .get(url, {
         params: {
-          houseId: '25',
+          confmKey: API_KEY,
+          admCd: address.admCd,
+          rnMgtSn: address.rnMgtSn,
+          udrtYn: address.udrtYn,
+          buldMnnm: address.buldMnnm,
+          buldSlno: address.buldSlno,
+          searchType: 'floorho',
+          dongNm: dongNm,
+          resultType: 'json',
         },
       })
       .then(function (result) {
-        if (result.isError) {
-          Alert.alert('검색 결과가 없습니다.');
-          return;
-        }
-
-        const {data} = result.data;
-
-        dispatch(
-          setHouseInfo({
-            ...houseInfo,
-            ...data,
-          }),
-        );
+        const ilst = result.data.results.juso.map(ho => {
+          return ho.hoNm.replace('호', '');
+        });
+        setHoList(ilst);
+        setSelectedHo(ilst[0]);
       })
       .catch(function (error) {
         console.log(error);
@@ -755,17 +727,16 @@ const SearchHouseSheet2 = props => {
                 <MepSearchResultButton
                   onPress={() => {
                     setAddress(item?.roadAddr);
-
-                    setDongList(
-                      item?.detBdNmList?.split(', ').map(dong => {
+                    setAddress(item?.roadAddr);
+                    if (item?.detBdNmList !== '') {
+                      const list = item?.detBdNmList?.split(', ').map(dong => {
                         return dong.replace('동', '');
-                      }),
-                    );
-                    setHoList(
-                      generateApartmentNumbers(6, 5).map(ho => {
-                        return ho;
-                      }),
-                    );
+                      });
+                      setDongList(list);
+                      getHoData(item, list[0] + '동');
+                    } else {
+                      getHoData(item);
+                    }
                     setSelectedItem(item);
 
                     setCurrentPageIndex(1);
@@ -818,7 +789,7 @@ const SearchHouseSheet2 = props => {
                     options={dongList}
                     onChange={index => {
                       setSelectedDong(dongList[index]);
-                      setSelectedHo(hoList[0]);
+                      getHoData(selectedItem, dongList[index] + '동');
                     }}
                   />
                 )}
@@ -830,7 +801,11 @@ const SearchHouseSheet2 = props => {
               <PickerContainer>
                 {hoList?.length > 0 && (
                   <WheelPicker
-                    selectedIndex={selectedHo ? hoList.indexOf(selectedHo) : 0}
+                    selectedIndex={
+                      hoList.indexOf(selectedHo) > -1
+                        ? hoList.indexOf(selectedHo)
+                        : 0
+                    }
                     containerStyle={{
                       width: 120,
                       height: 180,

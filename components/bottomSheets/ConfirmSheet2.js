@@ -187,10 +187,8 @@ const ConfirmSheet2 = props => {
   const houseInfo = useSelector(state => state.houseInfo.value);
   const chatDataList = useSelector(state => state.chatDataList.value);
 
-  {
-    console.log(houseInfo);
-  }
 
+  // 양도세 계산
   const calculateTax = () => {
     const data = {
       houseId: houseInfo.houseId || '1',

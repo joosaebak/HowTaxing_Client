@@ -459,23 +459,6 @@ const SearchHouseSheet = props => {
       });
   };
 
-  // 아파트 호수 생성
-  const generateApartmentNumbers = (totalFloors, totalLines) => {
-    const apartmentNumbers = [];
-
-    for (let floor = 1; floor <= totalFloors; floor++) {
-      for (let line = 1; line <= totalLines; line++) {
-        // 호수 생성 및 배열에 추가
-        const floorStr = String(floor); // 층을 두 자리 숫자로 변환
-        const lineStr = String(line).padStart(2, '0'); // 라인을 두 자리 숫자로 변환
-        const apartmentNumber = `${floorStr}${lineStr}`;
-        apartmentNumbers.push(apartmentNumber);
-      }
-    }
-
-    return apartmentNumbers;
-  };
-
   // 주택 정보 가져오기
   const getHouseDetailInfo = async () => {
     // 취득할 주택 정보 가져오기
@@ -509,11 +492,11 @@ const SearchHouseSheet = props => {
       });
   };
 
-  // 주택 동 호수 정보 가져오기
-  const getAddressDetail = async address => {
-    const API_KEY = 'U01TX0FVVEgyMDIzMTIxNDE2MDk0NTExNDM1NzY=';
+  // 주택 호 정보 가져오기
+  const getHoData = async (address, dongNm) => {
+    const API_KEY = 'devU01TX0FVVEgyMDI0MDEwOTIzMDQ0MjExNDQxOTY=';
 
-    const url = 'https://business.juso.go.kr/addrlink/addrDetailApiJsonp.do';
+    const url = 'https://business.juso.go.kr/addrlink/addrDetailApi.do';
 
     await axios
       .get(url, {
@@ -524,11 +507,17 @@ const SearchHouseSheet = props => {
           udrtYn: address.udrtYn,
           buldMnnm: address.buldMnnm,
           buldSlno: address.buldSlno,
+          searchType: 'floorho',
+          dongNm: dongNm,
           resultType: 'json',
         },
       })
       .then(function (result) {
-        console.log(result.data);
+        const ilst = result.data.results.juso.map(ho => {
+          return ho.hoNm.replace('호', '');
+        });
+        setHoList(ilst);
+        setSelectedHo(ilst[0]);
       })
       .catch(function (error) {
         console.log(error);
@@ -621,6 +610,8 @@ const SearchHouseSheet = props => {
         height:
           currentPageIndex === 0
             ? 850
+            : currentPageIndex === 1
+            ? 550 + apartmentInfoGroupHeight
             : currentPageIndex === 2
             ? keyboardVisible
               ? 360 + apartmentInfoGroupHeight
@@ -795,22 +786,16 @@ const SearchHouseSheet = props => {
                 <MepSearchResultButton
                   onPress={() => {
                     setAddress(item?.roadAddr);
-
-                    console.log('result', item);
-
-                    // setDongList(
-                    //   item?.detBdNmList?.split(', ').map(dong => {
-                    //     return dong.replace('동', '');
-                    //   }),
-                    // );
-                    // setHoList(
-                    //   generateApartmentNumbers(6, 5).map(ho => {
-                    //     return ho;
-                    //   }),
-                    // );
+                    if (item?.detBdNmList !== '') {
+                      const list = item?.detBdNmList?.split(', ').map(dong => {
+                        return dong.replace('동', '');
+                      });
+                      setDongList(list);
+                      getHoData(item, list[0] + '동');
+                    } else {
+                      getHoData(item);
+                    }
                     setSelectedItem(item);
-                    getAddressDetail(item);
-
                     if (props.payload?.data === 'villa') {
                       setCurrentPageIndex(1);
                     } else {
@@ -865,7 +850,7 @@ const SearchHouseSheet = props => {
                     options={dongList}
                     onChange={index => {
                       setSelectedDong(dongList[index]);
-                      setSelectedHo(hoList[0]);
+                      getHoData(selectedItem, dongList[index] + '동');
                     }}
                   />
                 )}
@@ -877,7 +862,11 @@ const SearchHouseSheet = props => {
               <PickerContainer>
                 {hoList?.length > 0 && (
                   <WheelPicker
-                    selectedIndex={selectedHo ? hoList.indexOf(selectedHo) : 0}
+                    selectedIndex={
+                      hoList.indexOf(selectedHo) > -1
+                        ? hoList.indexOf(selectedHo)
+                        : 0
+                    }
                     containerStyle={{
                       width: 120,
                       height: hoList.length > 5 ? 180 : 40 * hoList.length,

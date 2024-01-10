@@ -92,6 +92,13 @@ const Third = props => {
           hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}
           onPress={() => {
             navigation.goBack();
+            setTimeout(() => {
+              SheetManager.show('cert', {
+                payload: {
+                  cert: props.route.params.cert,
+                },
+              });
+            }, 300);
           }}>
           <CloseIcon />
         </TouchableOpacity>
@@ -272,8 +279,8 @@ const Third = props => {
                 setCert({
                   certType,
                   agreeCert,
-                  agreePrivacy,
                   agreeThird: true,
+                  agreePrivacy,
                 }),
               );
               navigation.goBack();

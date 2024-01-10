@@ -1,7 +1,6 @@
 // 가족 주택 등록하기
 
 import {
-  View,
   Text,
   TouchableOpacity,
   useWindowDimensions,

@@ -263,7 +263,6 @@ const Home = () => {
           </IconView>
         </Card>
       </ShadowContainer>
-      // 채널톡 버튼
       <FloatContainer>
         <DropShadow
           style={{

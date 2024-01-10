@@ -1,3 +1,5 @@
+// 결과에서 주택 정보 섹션 
+
 import {View, Text} from 'react-native';
 import React from 'react';
 import styled from 'styled-components';
