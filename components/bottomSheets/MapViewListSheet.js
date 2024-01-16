@@ -344,7 +344,7 @@ const MapViewListSheet = props => {
           latitude: Number(latitude),
           longitude: Number(longitude),
         });
-        getCurrentDistrict(Number(longitude), Number(latitude));
+        // getCurrentDistrict(longitude, latitude);
         setZoom(16);
       },
       console.error,
@@ -373,149 +373,134 @@ const MapViewListSheet = props => {
 
   // 아파트 명 검색
   const getAddress = async () => {
-    try {
-      const API_KEY = 'U01TX0FVVEgyMDIzMTIxNDE2MDk0NTExNDM1NzY=';
-      const url = `https://business.juso.go.kr/addrlink/addrLinkApi.do?confmKey=${API_KEY}&currentPage=0&countPerPage=1&keyword=${encodeURI(
-        searchText,
-      )}&resultType=json`;
+    const API_KEY = 'U01TX0FVVEgyMDIzMTIxNDE2MDk0NTExNDM1NzY=';
+    const COUNT_PER_PAGE = 1;
+    const keyword = searchText;
 
-      const response = await axios.get(url);
+    const url = `https://business.juso.go.kr/addrlink/addrLinkApiJsonp.do?confmKey=${API_KEY}&currentPage=0&countPerPage=${COUNT_PER_PAGE}&keyword=${encodeURI(
+      keyword,
+    )}&resultType=json`;
 
-      if (response.data.results.juso.length === 0) {
-        SheetManager.show('info', {
-          payload: {
-            message: '검색 결과가 없습니다.',
-            type: 'error',
-          },
+    await axios
+      .get(url)
+      .then(async result => {
+        const extractedData = result.data.match(/\(.*\)/s)[0];
+
+        const parsedData = JSON.parse(
+          extractedData.substring(1, extractedData.length - 1),
+        );
+
+        if (parsedData.results.common.errorCode !== '0') {
+          SheetManager.show('info', {
+            payload: {
+              message: parsedData.results.common.errorMessage,
+              description: parsedData.results.common.errorMessage,
+              type: 'error',
+            },
+          });
+          return;
+        }
+
+        console.log('111', parsedData.results.juso);
+
+        if (!parsedData.results.juso[0]) {
+          SheetManager.show('info', {
+            payload: {
+              message: '검색 결과가 없습니다.',
+              type: 'error',
+            },
+          });
+          return;
+        }
+
+        const location = await getAPTLocation({
+          ADRES: parsedData.results.juso[0].roadAddr,
         });
-      }
 
-      const location = await getAPTLocation({
-        ADRES: response.data.results.juso[0].roadAddr,
+        setMyPosition({
+          latitude: Number(location.latitude),
+          longitude: Number(location.longitude),
+        });
+
+        getAddressInfo(parsedData.results.juso[0].roadAddr);
+      })
+      .catch(function (error) {
+        console.log(error);
       });
-      setMyPosition({
-        latitude: Number(location.latitude),
-        longitude: Number(location.longitude),
-      });
-    } catch (error) {
-      console.error(error);
-    }
   };
 
-  // 현재 위치의 동 가져오기
   const getCurrentDistrict = async (longitude, latitude) => {
     const API_KEY = 'e094e49e35c61a9da896785b6fee020a';
     const config = {
       headers: {
         Authorization: `KakaoAK ${API_KEY}`,
       },
-    };
+    }; // 헤더 설정
     const url = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${longitude}&y=${latitude}&input_coord=WGS84`;
 
-    const address_data = await axios
+    const address_name = await axios
       .get(url, config)
       .then(function (result) {
-        // API호출
-        return result.data.documents[0];
+        return result.data.documents[0].address_name;
       })
       .catch(function (error) {
         console.log(error);
       });
 
-    if (
-      address_data.region_2depth_name &&
-      address_data.region_2depth_name.includes('구')
-    ) {
-      const address_name =
-        address_data.region_2depth_name.replace('시 ', '') +
-        ' ' +
-        address_data.region_3depth_name;
-      if (addressArea !== address_name) {
-        setAddressArea(address_name);
-        getAddressInfo(address_name, latitude, longitude);
-        return;
-      }
-    } else {
-      const address_name = address_data.address_name;
-      if (addressArea !== address_name) {
-        setAddressArea(address_name);
-        getAddressInfo(address_name, latitude, longitude);
-        return;
-      }
-    }
+    getAddressInfo(address_name);
   };
 
   // 해당 동에 속하는 아파트 정보 가져오기
-  const getAddressInfo = async (address, latitude, longitude) => {
+  const getAddressInfo = async address => {
     const API_KEY =
       'ZWYbv%2BOs9rH3SOjqQZdcBDDXV4k6EasX9%2BswAK7H9yHd5L6U6CNyS2L1p2q0r%2BglE2sXxryzWReJ8fvRaGNgEQ%3D%3D';
+    const config = {
+      headers: {
+        Authorization: `${API_KEY}`,
+      },
+    }; // 헤더 설정
 
-    const url = `https://api.odcloud.kr/api/AptIdInfoSvc/v1/getAptInfo?page=1&perPage=100&returnType=json&cond%5BADRES%3A%3ALIKE%5D=${address}&serviceKey=${API_KEY}`;
+    const url = `https://api.odcloud.kr/api/AptIdInfoSvc/v1/getAptInfo?page=1&perPage=50&returnType=json&cond%5BADRES%3A%3ALIKE%5D=${address}&serviceKey=${API_KEY}`;
 
-    try {
-      const response = await axios.get(url);
-      const aptList = response.data.data.filter(el => el.COMPLEX_GB_CD === '1');
+    await axios
+      .get(url, config)
+      .then(async result => {
+        console.log(result.data);
+        // API호출
+        // const promises = result.data.data.map(async apt_item => {
+        //   return getAPTLocation(apt_item);
+        // });
 
-      const locations = [];
-      for (const apt_item of aptList) {
-        const location = await getAPTLocation(apt_item);
-        locations.push(location);
-      }
+        // // 모든 비동기 작업이 완료될 때까지 기다립니다.
+        // const locations = await Promise.all(promises);
 
-      // 거리순 정렬
-      locations.sort((a, b) => {
-        const aDistance =
-          Math.pow(Number(a.latitude) - Number(latitude), 2) +
-          Math.pow(Number(a.longitude) - Number(longitude), 2);
-        const bDistance =
-          Math.pow(Number(b.latitude) - Number(latitude), 2) +
-          Math.pow(Number(b.longitude) - Number(longitude), 2);
-        return aDistance - bDistance;
-      });
-
-      // 검색어가 포함된 아파트가 있으면 맨 위로 이동
-      if (searchText !== '') {
-        console.log(
-          'searchText',
-          searchText,
-          locations.findIndex(el =>
-            el.COMPLEX_NM1?.includes(searchText.trim()),
-          ) > -1,
+        const locations = await Promise.all(
+          result.data.data.map(async apt_item => {
+            console.log(apt_item);
+            return getAPTLocation(apt_item);
+          }),
         );
-        const index = locations.findIndex(el =>
-          el.COMPLEX_NM1?.includes(searchText),
-        );
-        if (index > -1) {
-          console.log('index', index);
-          const item = locations[index];
-          locations.splice(index, 1);
-          locations.unshift(item);
-          setMyPosition({
-            latitude: Number(item.latitude),
-            longitude: Number(item.longitude),
-          });
-        }
-      }
 
-      if (locations.length === 0) {
-        SheetManager.show('info', {
-          payload: {
-            message: '검색 결과가 없습니다.',
-            type: 'error',
-          },
+        // console.log(locations);
+
+        // list를 현재 위치 기준에서 가까운 순으로 정렬
+        const sortedList = locations.sort((a, b) => {
+          const aDistance =
+            Math.pow(Number(a.latitude) - Number(myPosition.latitude), 2) +
+            Math.pow(Number(a.longitude) - Number(myPosition.longitude), 2);
+          const bDistance =
+            Math.pow(Number(b.latitude) - Number(myPosition.latitude), 2) +
+            Math.pow(Number(b.longitude) - Number(myPosition.longitude), 2);
+          return aDistance - bDistance;
         });
-        return;
-      }
 
-      if (locations.length > 0) {
-        setListData(locations);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
+        setListData(sortedList);
+      })
+      .catch(function (error) {
+        console.log(error);
+      });
   };
 
-  // 아파트 위치 가져오기
   const getAPTLocation = async apt_item => {
     const API_KEY = 'e094e49e35c61a9da896785b6fee020a';
     const config = {
@@ -563,7 +548,7 @@ const MapViewListSheet = props => {
       },
     }; // 헤더 설정
 
-    const url = `https://api.odcloud.kr/api/AptIdInfoSvc/v1/getDongInfo?page=1&perPage=1&cond%5BCOMPLEX_PK%3A%3AEQ%5D=${id}&serviceKey=${API_KEY}`;
+    const url = `https://api.odcloud.kr/api/AptIdInfoSvc/v1/getDongInfo?page=1&perPage=30&cond%5BCOMPLEX_PK%3A%3AEQ%5D=${id}&serviceKey=${API_KEY}`;
 
     await axios
       .get(url, config)
@@ -573,6 +558,10 @@ const MapViewListSheet = props => {
           return item.DONG_NM1.replace('동', '');
         });
         setDongList(dongs);
+        const hos = result.data.data.map(item => {
+          const list = generateApartmentNumbers(item.GRND_FLR_CNT, 5);
+          return list;
+        });
 
         setHoList(hos[0]);
       })
@@ -581,38 +570,21 @@ const MapViewListSheet = props => {
       });
   };
 
-  // 주택 호 정보 가져오기
-  const getHoData = async (address, dongNm) => {
-    const API_KEY = 'devU01TX0FVVEgyMDI0MDEwOTIzMDQ0MjExNDQxOTY=';
+  const generateApartmentNumbers = (totalFloors, totalLines) => {
+    const apartmentNumbers = [];
 
-    const url = 'https://business.juso.go.kr/addrlink/addrDetailApi.do';
+    for (let floor = 1; floor <= totalFloors; floor++) {
+      for (let line = 1; line <= totalLines; line++) {
+        // 호수 생성 및 배열에 추가
+        const floorStr = String(floor); // 층을 두 자리 숫자로 변환
+        const lineStr = String(line).padStart(2, '0'); // 라인을 두 자리 숫자로 변환
+        const apartmentNumber = `${floorStr}${lineStr}`;
+        apartmentNumbers.push(apartmentNumber);
+      }
+    }
 
-    await axios
-      .get(url, {
-        params: {
-          confmKey: API_KEY,
-          admCd: address.admCd,
-          rnMgtSn: address.rnMgtSn,
-          udrtYn: address.udrtYn,
-          buldMnnm: address.buldMnnm,
-          buldSlno: address.buldSlno,
-          searchType: 'floorho',
-          dongNm: dongNm,
-          resultType: 'json',
-        },
-      })
-      .then(function (result) {
-        const ilst = result.data.results.juso.map(ho => {
-          return ho.hoNm.replace('호', '');
-        });
-        setHoList(ilst);
-        setSelectedHo(ilst[0]);
-      })
-      .catch(function (error) {
-        console.log(error);
-      });
+    return apartmentNumbers;
   };
-
   // 아파트 단지 선택 시 상세 정보 가져오기
   const getHouseDetailInfo = async () => {
     const url = 'http://13.125.194.154:8080/house/detail';

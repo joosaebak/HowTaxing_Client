@@ -451,11 +451,7 @@ const MapViewListSheet2 = props => {
           latitude: Number(location.latitude),
           longitude: Number(location.longitude),
         });
-        // setZoom(16);
-        // getCurrentDistrict(
-        //   Number(location.longitude),
-        //   Number(location.latitude),
-        // );
+
         getAddressInfo(parsedData.results.juso[0].roadAddr);
       })
       .catch(function (error) {
@@ -791,10 +787,7 @@ const MapViewListSheet2 = props => {
                           setListData([]);
                           return;
                         }
-                        // setMyPosition({
-                        //   latitude: Number(e.latitude),
-                        //   longitude: Number(e.longitude),
-                        // });
+
                         getCurrentDistrict(e.longitude, e.latitude);
                       }}>
                       {renderMaker}
